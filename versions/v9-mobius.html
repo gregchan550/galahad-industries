@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries</title>
+<meta name="description" content="Galahad Industries — Enterprise AI software. Systems initializing.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;600;700&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --amber: #c9a84c;
+    --amber-dim: rgba(201, 168, 76, 0.3);
+    --amber-glow: rgba(201, 168, 76, 0.4);
+    --blue: #4a9eff;
+    --blue-dim: rgba(74, 158, 255, 0.3);
+    --blue-glow: rgba(74, 158, 255, 0.3);
+    --bg: #0a0a0c;
+    --text-dim: rgba(255, 255, 255, 0.4);
+    --text-mid: rgba(255, 255, 255, 0.6);
+    --text-bright: rgba(255, 255, 255, 0.9);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* === BOOT SCREEN === */
+  #boot-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 40px;
+    overflow: hidden;
+    transition: opacity 0.4s ease;
+  }
+
+  .boot-line {
+    font-size: clamp(10px, 1.3vw, 13px);
+    line-height: 1.5;
+    color: var(--blue);
+    opacity: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 0.1s;
+  }
+  .boot-line.visible { opacity: 1; }
+  .boot-line .prefix { color: rgba(74, 158, 255, 0.5); }
+  .boot-line .success { color: #4ade80; }
+  .boot-line .warn { color: var(--amber); }
+
+  #cursor-init {
+    display: inline-block;
+    width: 8px; height: 16px;
+    background: var(--blue);
+    animation: blink 0.6s step-end infinite;
+    margin-left: 2px;
+    vertical-align: middle;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .init-text {
+    font-size: clamp(13px, 1.6vw, 16px);
+    color: var(--blue);
+    display: inline;
+    letter-spacing: 2px;
+  }
+
+  #init-line {
+    margin-top: 40vh;
+    transition: margin-top 0.4s ease;
+  }
+  #init-line.shifted { margin-top: 20px; }
+
+  /* === TRANSITION CANVAS === */
+  #transition-canvas {
+    position: fixed; inset: 0;
+    z-index: 110;
+    pointer-events: none;
+  }
+
+  /* === MAIN SCENE === */
+  #main-scene {
+    position: fixed; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    z-index: 50;
+    transition: opacity 0.6s ease;
+  }
+  #main-scene.visible { opacity: 1; }
+
+  #mobius-canvas {
+    position: fixed; inset: 0;
+    z-index: 1;
+  }
+
+  /* Title */
+  .title-container {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+    margin-top: 160px;
+  }
+  .title-container.visible { opacity: 1; }
+
+  .company-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(24px, 4.5vw, 52px);
+    letter-spacing: clamp(8px, 1.5vw, 20px);
+    color: var(--text-bright);
+    text-transform: uppercase;
+    text-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+  }
+
+  .tagline {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(11px, 1.3vw, 15px);
+    color: var(--amber);
+    opacity: 0;
+    margin-top: 16px;
+    letter-spacing: 3px;
+    transition: opacity 1s ease;
+  }
+  .tagline.visible { opacity: 0.8; }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+  .bottom-bar.visible { opacity: 1; }
+  .bottom-bar span {
+    font-size: clamp(9px, 1vw, 11px);
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    margin-right: 8px;
+    animation: pulse-dot 2s ease-in-out infinite;
+    vertical-align: middle;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.5; box-shadow: 0 0 4px var(--blue-glow); }
+    50% { opacity: 1; box-shadow: 0 0 12px var(--blue-glow); }
+  }
+
+  /* Scanlines & vignette */
+  .scanlines {
+    position: fixed; inset: 0;
+    z-index: 200;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+  .vignette {
+    position: fixed; inset: 0;
+    z-index: 199;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+  }
+
+  /* Flash overlay */
+  #flash-overlay {
+    position: fixed; inset: 0;
+    z-index: 120;
+    pointer-events: none;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  /* HUD notifications */
+  .hud-notification {
+    position: fixed;
+    z-index: 15;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(9px, 1vw, 11px);
+    letter-spacing: 1px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  .hud-notification.visible { opacity: 1; }
+  .hud-notification.fade-out { opacity: 0; }
+  .hud-notification.top-left { top: 30px; left: 30px; color: var(--blue); text-align: left; }
+  .hud-notification.top-right { top: 30px; right: 30px; color: var(--blue); text-align: right; }
+  .hud-notification.bottom-left { bottom: 60px; left: 30px; color: var(--amber-dim); text-align: left; }
+  .hud-notification.bottom-right { bottom: 60px; right: 30px; color: var(--amber-dim); text-align: right; }
+
+  @media (max-width: 600px) {
+    #boot-screen { padding: 20px; }
+    .bottom-bar { padding: 15px 20px; flex-direction: column; gap: 8px; }
+    .title-container { margin-top: 120px; }
+    .hud-notification { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Boot sequence -->
+<div id="boot-screen">
+  <div id="init-line">
+    <span class="init-text" id="init-text"></span><span id="cursor-init"></span>
+  </div>
+  <div id="boot-log" style="margin-top: 12px;"></div>
+</div>
+
+<!-- Transition canvas -->
+<canvas id="transition-canvas"></canvas>
+
+<!-- Flash -->
+<div id="flash-overlay"></div>
+
+<!-- Main scene -->
+<div id="main-scene">
+  <canvas id="mobius-canvas"></canvas>
+
+  <div class="title-container" id="title-container">
+    <div class="company-name" id="company-name">GALAHAD INDUSTRIES</div>
+    <div class="tagline" id="tagline">The seat is taken.</div>
+  </div>
+
+  <div class="bottom-bar" id="bottom-bar">
+    <span><span class="status-dot"></span>All systems nominal</span>
+    <span>Est. 2026 &mdash; Brisbane, AU</span>
+  </div>
+</div>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // === DOM REFS ===
+  const bootScreen = document.getElementById('boot-screen');
+  const mainScene = document.getElementById('main-scene');
+  const initText = document.getElementById('init-text');
+  const initLine = document.getElementById('init-line');
+  const cursorInit = document.getElementById('cursor-init');
+  const bootLog = document.getElementById('boot-log');
+  const transitionCanvas = document.getElementById('transition-canvas');
+  const mobiusCanvas = document.getElementById('mobius-canvas');
+  const flashOverlay = document.getElementById('flash-overlay');
+  const titleContainer = document.getElementById('title-container');
+
+  const ctx = transitionCanvas.getContext('2d');
+  const mctx = mobiusCanvas.getContext('2d');
+
+  let W = window.innerWidth, H = window.innerHeight;
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    transitionCanvas.width = mobiusCanvas.width = W;
+    transitionCanvas.height = mobiusCanvas.height = H;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // === SAFETY TIMEOUT ===
+  const SAFETY_TIMEOUT = 15000;
+  let sequenceComplete = false;
+
+  setTimeout(() => {
+    if (!sequenceComplete) {
+      console.warn('[SAFETY] Force-showing main scene after timeout');
+      forceShowMainScene();
+    }
+  }, SAFETY_TIMEOUT);
+
+  function forceShowMainScene() {
+    if (sequenceComplete) return;
+    sequenceComplete = true;
+    bootScreen.style.display = 'none';
+    transitionCanvas.style.display = 'none';
+    ctx.clearRect(0, 0, W, H);
+    mainScene.classList.add('visible');
+    if (!mobiusRunning) initMobius();
+    titleContainer.classList.add('visible');
+    document.getElementById('tagline').classList.add('visible');
+    setTimeout(() => {
+      document.getElementById('bottom-bar').classList.add('visible');
+      startHudNotifications();
+    }, 1000);
+  }
+
+  // === BOOT MESSAGES (copied exactly from v3b) ===
+  const bootMessages = [
+    { text: '[CORE]  Neural cores: 12 online', cls: 'success' },
+    { text: '[CORE]  Inference latency: 0.3ms', cls: 'success' },
+    { text: '[MEM]   Knowledge graph: 47M nodes', cls: 'success' },
+    { text: '[MEM]   Vector store mounted — 2.4M embeddings', cls: 'success' },
+    { text: '[NET]   Encrypted mesh network...', cls: '' },
+    { text: '[NET]   8 secure channels established', cls: 'success' },
+    { text: '[SYS]   Model weights verified — integrity OK', cls: 'success' },
+    { text: '[SYS]   Reasoning modules initialized', cls: 'success' },
+    { text: '[AUTH]  Quest parameters: LOADED', cls: 'warn' },
+    { text: '[AUTH]  Directive: Undercut legacy enterprise by 3-5x', cls: 'warn' },
+    { text: '[PLAN]  Target sectors: ERP, CRM, Supply Chain', cls: '' },
+    { text: '[PLAN]  Competitive analysis loaded', cls: 'success' },
+    { text: '[AGI]   Agentic workflows online', cls: 'success' },
+    { text: '[AGI]   Autonomous planning active', cls: 'success' },
+    { text: '[BOOT]  All subsystems nominal', cls: 'success' },
+    { text: '[BOOT]  Galahad Industries — READY', cls: 'warn' },
+  ];
+
+  // === UTILITIES ===
+  function typeText(element, text, speed, callback) {
+    let i = 0;
+    function type() {
+      if (i < text.length) {
+        element.textContent += text[i++];
+        setTimeout(type, speed + Math.random() * 30);
+      } else if (callback) callback();
+    }
+    type();
+  }
+
+  function addBootLine(msg, callback) {
+    const line = document.createElement('div');
+    line.className = 'boot-line';
+    const match = msg.text.match(/^(\[[A-Z]+\]\s*)(.*)/);
+    if (match) {
+      const prefix = document.createElement('span');
+      prefix.className = 'prefix';
+      prefix.textContent = match[1];
+      line.appendChild(prefix);
+      const content = document.createElement('span');
+      if (msg.cls) content.className = msg.cls;
+      content.textContent = match[2];
+      line.appendChild(content);
+    } else {
+      line.textContent = msg.text;
+    }
+    bootLog.appendChild(line);
+    requestAnimationFrame(() => line.classList.add('visible'));
+    setTimeout(callback, 30 + Math.random() * 50);
+  }
+
+  function runBootLines(msgs, idx, cb) {
+    if (idx >= msgs.length) { setTimeout(cb, 400); return; }
+    addBootLine(msgs[idx], () => runBootLines(msgs, idx + 1, cb));
+  }
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  // =============================================
+  // === PHASE 1: BOOT SEQUENCE (~5 seconds)  ===
+  // =============================================
+  setTimeout(() => {
+    typeText(initText, 'INITIALIZING...', 55, () => {
+      setTimeout(() => {
+        initLine.classList.add('shifted');
+        cursorInit.style.display = 'none';
+        setTimeout(() => {
+          runBootLines(bootMessages, 0, () => {
+            startTransition();
+          });
+        }, 250);
+      }, 300);
+    });
+  }, 800);
+
+  // =============================================
+  // === PHASE 2: GLITCH + PARTICLE TRANSITION ===
+  // =============================================
+
+  function harvestCharPositions() {
+    const chars = [];
+    const initEl = document.getElementById('init-text');
+    const initRect = initEl.getBoundingClientRect();
+    const initTxt = initEl.textContent;
+    for (let i = 0; i < initTxt.length; i++) {
+      chars.push({
+        char: initTxt[i],
+        x: initRect.left + (i / initTxt.length) * initRect.width,
+        y: initRect.top + initRect.height / 2,
+        color: [74, 158, 255],
+      });
+    }
+    const lines = bootLog.querySelectorAll('.boot-line');
+    lines.forEach(line => {
+      const rect = line.getBoundingClientRect();
+      const text = line.textContent;
+      const spans = line.querySelectorAll('span');
+      let col = [74, 158, 255];
+      if (spans.length > 1) {
+        const cls = spans[1].className;
+        if (cls === 'success') col = [74, 222, 128];
+        else if (cls === 'warn') col = [201, 168, 76];
+      }
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === ' ') continue;
+        chars.push({
+          char: text[i],
+          x: rect.left + (i / text.length) * rect.width,
+          y: rect.top + rect.height * 0.7,
+          color: col,
+        });
+      }
+    });
+    return chars;
+  }
+
+  const glitchChars = '!@#$%^&*()_+-=[]{}|;:,.<>?/~`0123456789ABCDEFabcdef';
+  let particles = [];
+  let tStart = 0;
+
+  // Generate Möbius strip target positions for particles
+  function makeMobiusTargets(count) {
+    const targets = [];
+    const rows = Math.ceil(Math.sqrt(count * 3)); // more u steps
+    const cols = Math.ceil(count / rows);
+    let idx = 0;
+    for (let i = 0; i < rows && idx < count; i++) {
+      const u = (i / rows) * Math.PI * 2;
+      for (let j = 0; j < cols && idx < count; j++) {
+        const v = -0.3 + (j / (cols - 1)) * 0.6;
+        const x3d = (1 + (v / 2) * Math.cos(u / 2)) * Math.cos(u);
+        const y3d = (1 + (v / 2) * Math.cos(u / 2)) * Math.sin(u);
+        const z3d = (v / 2) * Math.sin(u / 2);
+        targets.push({ x3d, y3d, z3d, u, v });
+        idx++;
+      }
+    }
+    return targets;
+  }
+
+  function project3D(x3d, y3d, z3d, rotY, tiltX) {
+    // Rotate around Y axis
+    let x = x3d * Math.cos(rotY) - z3d * Math.sin(rotY);
+    let z = x3d * Math.sin(rotY) + z3d * Math.cos(rotY);
+    let y = y3d;
+
+    // Tilt (rotate around X axis) for viewing angle
+    const y2 = y * Math.cos(tiltX) - z * Math.sin(tiltX);
+    const z2 = y * Math.sin(tiltX) + z * Math.cos(tiltX);
+    y = y2;
+    z = z2;
+
+    const focalLength = 3;
+    const scale = focalLength / (z + focalLength);
+    const screenScale = Math.min(W, H) * 0.22;
+    return {
+      sx: W / 2 + x * scale * screenScale,
+      sy: H / 2 - 40 + y * scale * screenScale,
+      scale: scale,
+      z: z
+    };
+  }
+
+  function startTransition() {
+    if (sequenceComplete) return;
+
+    const charData = harvestCharPositions();
+    const mobiusTargets = makeMobiusTargets(charData.length + 200);
+
+    particles = charData.map((c, i) => {
+      const target = mobiusTargets[i] || mobiusTargets[i % mobiusTargets.length];
+      return {
+        x: c.x, y: c.y,
+        ox: c.x, oy: c.y,
+        target: target,
+        vx: 0, vy: 0,
+        char: c.char,
+        color: c.color,
+        alpha: 1,
+      };
+    });
+
+    tStart = performance.now();
+    animateTransition();
+  }
+
+  function animateTransition() {
+    if (sequenceComplete) return;
+
+    const now = performance.now();
+    const elapsed = now - tStart;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2;
+
+    // === GLITCH (0–1000ms) ===
+    if (elapsed < 1000) {
+      const t = elapsed / 1000;
+
+      if (Math.random() < 0.3 + t * 0.5) {
+        const col = Math.random() > 0.5 ? 'rgba(201, 168, 76, 0.04)' : 'rgba(74, 158, 255, 0.04)';
+        ctx.fillStyle = col;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      if (Math.random() < t * 0.6) {
+        const y = Math.random() * H;
+        const h = 2 + Math.random() * 20;
+        ctx.fillStyle = `rgba(74, 158, 255, ${0.02 + t * 0.04})`;
+        ctx.fillRect(0, y, W, h);
+      }
+
+      ctx.font = "11px 'JetBrains Mono', monospace";
+      particles.forEach(p => {
+        if (p.alpha === 0) return;
+        if (Math.random() < t * 0.6) {
+          p.char = glitchChars[Math.floor(Math.random() * glitchChars.length)];
+        }
+        const jitter = (Math.random() - 0.5) * 10 * t;
+        ctx.fillStyle = `rgba(${p.color[0]}, ${p.color[1]}, ${p.color[2]}, ${p.alpha * 0.9})`;
+        ctx.fillText(p.char, p.x + jitter, p.y);
+      });
+
+      if (elapsed > 600) {
+        bootScreen.style.opacity = String(Math.max(0, 1 - (elapsed - 600) / 400));
+      }
+    }
+
+    // === EXPLODE (1000–2000ms) ===
+    else if (elapsed < 2000) {
+      bootScreen.style.display = 'none';
+      const t = (elapsed - 1000) / 1000;
+
+      particles.forEach(p => {
+        if (p.vx === 0 && p.vy === 0) {
+          const angle = Math.atan2(p.y - cy, p.x - cx) + (Math.random() - 0.5) * 1.5;
+          const speed = 2 + Math.random() * 5;
+          p.vx = Math.cos(angle) * speed;
+          p.vy = Math.sin(angle) * speed;
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+
+        const charFade = Math.max(0, 1 - t * 3);
+        if (charFade > 0.1) {
+          ctx.font = `${Math.round(11 * (0.5 + charFade * 0.5))}px 'JetBrains Mono', monospace`;
+          ctx.fillStyle = `rgba(${p.color[0]}, ${p.color[1]}, ${p.color[2]}, ${p.alpha * charFade * 0.8})`;
+          ctx.fillText(p.char, p.x, p.y);
+        }
+        const dotA = Math.min(1, t * 2) * p.alpha * 0.8;
+        ctx.fillStyle = `rgba(74, 158, 255, ${dotA})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // === SWARM TO MÖBIUS (2000–3800ms) ===
+    else if (elapsed < 3800) {
+      const t = (elapsed - 2000) / 1800;
+      const rotY = 0;
+      const tiltX = -0.5; // ~30 degrees
+
+      particles.forEach(p => {
+        const proj = project3D(p.target.x3d, p.target.y3d, p.target.z3d, rotY, tiltX);
+        const tx = proj.sx;
+        const ty = proj.sy;
+
+        if (t < 0.2) {
+          // Swirl
+          const ax = (cx - p.x) * 0.02;
+          const ay = (cy - p.y) * 0.02;
+          const dx = p.x - cx, dy = p.y - cy;
+          p.vx = (p.vx + ax + (-dy * 0.003)) * 0.92;
+          p.vy = (p.vy + ay + (dx * 0.003)) * 0.92;
+        } else {
+          // Converge to Möbius positions
+          const pull = 0.03 + (t - 0.2) * 0.15;
+          p.vx = (p.vx + (tx - p.x) * pull) * 0.88;
+          p.vy = (p.vy + (ty - p.y) * pull) * 0.88;
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const brightness = 0.3 + t * 0.5;
+        // Transition color: blue to gold/blue mix
+        const isGold = p.target.u > Math.PI;
+        if (isGold && t > 0.5) {
+          ctx.fillStyle = `rgba(201, 168, 76, ${Math.min(1, brightness) * 0.7})`;
+        } else {
+          ctx.fillStyle = `rgba(74, 158, 255, ${Math.min(1, brightness) * 0.7})`;
+        }
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.2 + (1 - t) * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // === FLASH + HANDOFF (3800–5000ms) ===
+    else if (elapsed < 5000) {
+      const t = (elapsed - 3800) / 1200;
+
+      if (t < 0.05) {
+        // Flash
+        flashOverlay.style.opacity = '0.12';
+        setTimeout(() => { flashOverlay.style.opacity = '0'; }, 200);
+
+        mainScene.classList.add('visible');
+        if (!mobiusRunning) initMobius();
+      }
+
+      // Fade out transition particles
+      const fade = Math.max(0, 1 - t * 2.5);
+      if (fade > 0) {
+        const rotY = 0;
+        const tiltX = -0.5;
+        particles.forEach(p => {
+          const proj = project3D(p.target.x3d, p.target.y3d, p.target.z3d, rotY, tiltX);
+          ctx.fillStyle = `rgba(74, 158, 255, ${fade * 0.3})`;
+          ctx.beginPath();
+          ctx.arc(proj.sx, proj.sy, 1, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      // Reveal title
+      if (t > 0.3 && !titleContainer.classList.contains('visible')) {
+        titleContainer.classList.add('visible');
+        setTimeout(() => document.getElementById('tagline').classList.add('visible'), 600);
+      }
+
+      if (t > 0.6) {
+        document.getElementById('bottom-bar').classList.add('visible');
+        startHudNotifications();
+      }
+    }
+
+    // === DONE ===
+    else {
+      ctx.clearRect(0, 0, W, H);
+      transitionCanvas.style.display = 'none';
+      sequenceComplete = true;
+      return;
+    }
+
+    requestAnimationFrame(animateTransition);
+  }
+
+  // =============================================
+  // === MÖBIUS STRIP RENDERER                 ===
+  // =============================================
+
+  let mobiusRunning = false;
+  let mouseX = W / 2, mouseY = H / 2;
+
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+
+  function initMobius() {
+    if (mobiusRunning) return;
+    mobiusRunning = true;
+
+    const PARTICLE_COUNT = 1000;
+    const CONNECTION_DIST = 0.28;
+    const SPARK_COUNT = 15;
+
+    // Generate Möbius strip particles
+    const mobiusParticles = [];
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const u = (i / PARTICLE_COUNT) * Math.PI * 2;
+      // Distribute v with slight randomness for organic feel
+      const vBase = (Math.random() - 0.5) * 0.6;
+      const v = vBase;
+
+      const isGold = (i % 3 !== 0); // ~2/3 gold, 1/3 blue
+      mobiusParticles.push({
+        u, v,
+        isGold,
+        baseAlpha: 0.4 + Math.random() * 0.5,
+        pulseOffset: Math.random() * Math.PI * 2,
+        pulseSpeed: 0.5 + Math.random() * 1.5,
+        size: 1 + Math.random() * 1.5,
+      });
+    }
+
+    // Sparks that break free and orbit
+    const sparks = [];
+    for (let i = 0; i < SPARK_COUNT; i++) {
+      sparks.push({
+        // Source position on strip
+        sourceU: Math.random() * Math.PI * 2,
+        sourceV: (Math.random() - 0.5) * 0.4,
+        // Orbit params
+        orbitRadius: 0.1 + Math.random() * 0.3,
+        orbitSpeed: 0.5 + Math.random() * 1.5,
+        orbitPhase: Math.random() * Math.PI * 2,
+        orbitTilt: (Math.random() - 0.5) * 1.5,
+        // Lifecycle
+        life: Math.random(),
+        lifeSpeed: 0.003 + Math.random() * 0.005,
+        state: 'orbiting', // orbiting | returning
+        returnT: 0,
+        isGold: Math.random() > 0.4,
+        size: 0.8 + Math.random() * 1.2,
+      });
+    }
+
+    function getMobiusPoint(u, v) {
+      const x = (1 + (v / 2) * Math.cos(u / 2)) * Math.cos(u);
+      const y = (1 + (v / 2) * Math.cos(u / 2)) * Math.sin(u);
+      const z = (v / 2) * Math.sin(u / 2);
+      return { x, y, z };
+    }
+
+    function projectPoint(x3d, y3d, z3d, rotY, tiltX, parallaxX, parallaxY) {
+      // Rotate Y
+      let x = x3d * Math.cos(rotY) - z3d * Math.sin(rotY);
+      let z = x3d * Math.sin(rotY) + z3d * Math.cos(rotY);
+      let y = y3d;
+
+      // Tilt X + parallax
+      const totalTiltX = tiltX + parallaxY;
+      const y2 = y * Math.cos(totalTiltX) - z * Math.sin(totalTiltX);
+      const z2 = y * Math.sin(totalTiltX) + z * Math.cos(totalTiltX);
+      y = y2;
+      z = z2;
+
+      // Slight Y-axis parallax from mouse
+      const x3 = x * Math.cos(parallaxX) - z * Math.sin(parallaxX);
+      const z3 = x * Math.sin(parallaxX) + z * Math.cos(parallaxX);
+      x = x3;
+      z = z3;
+
+      const focalLength = 3;
+      const scale = focalLength / (z + focalLength);
+      const screenScale = Math.min(W, H) * 0.22;
+      return {
+        sx: W / 2 + x * scale * screenScale,
+        sy: H / 2 - 40 + y * scale * screenScale,
+        scale,
+        z
+      };
+    }
+
+    let startTime = performance.now();
+
+    function drawMobius() {
+      mctx.clearRect(0, 0, W, H);
+
+      const now = performance.now();
+      const time = (now - startTime) / 1000;
+      const rotY = time * 0.3; // continuous rotation
+      const tiltX = -0.5; // ~30 degree tilt
+
+      // Mouse parallax
+      const parallaxX = ((mouseX / W) - 0.5) * 0.15;
+      const parallaxY = ((mouseY / H) - 0.5) * 0.1;
+
+      // === BACKGROUND GLOW ===
+      const glowGrad = mctx.createRadialGradient(W / 2, H / 2 - 40, 0, W / 2, H / 2 - 40, Math.min(W, H) * 0.35);
+      glowGrad.addColorStop(0, 'rgba(201, 168, 76, 0.06)');
+      glowGrad.addColorStop(0.3, 'rgba(74, 158, 255, 0.03)');
+      glowGrad.addColorStop(1, 'transparent');
+      mctx.fillStyle = glowGrad;
+      mctx.fillRect(0, 0, W, H);
+
+      // === PROJECT ALL PARTICLES ===
+      const projected = [];
+      for (let i = 0; i < mobiusParticles.length; i++) {
+        const p = mobiusParticles[i];
+        const pt = getMobiusPoint(p.u, p.v);
+        const proj = projectPoint(pt.x, pt.y, pt.z, rotY, tiltX, parallaxX, parallaxY);
+
+        const pulse = Math.sin(time * p.pulseSpeed + p.pulseOffset) * 0.3 + 0.7;
+        const alpha = p.baseAlpha * pulse * Math.max(0.3, proj.scale);
+
+        projected.push({
+          sx: proj.sx,
+          sy: proj.sy,
+          z: proj.z,
+          scale: proj.scale,
+          alpha,
+          isGold: p.isGold,
+          size: p.size * Math.max(0.5, proj.scale),
+          u: p.u,
+          v: p.v,
+          x3d: pt.x, y3d: pt.y, z3d: pt.z,
+        });
+      }
+
+      // Sort by z for depth ordering
+      projected.sort((a, b) => a.z - b.z);
+
+      // === NEURAL CONNECTIONS ===
+      // Only draw connections between nearby particles (in 3D space)
+      // Use a subset for performance
+      mctx.lineWidth = 0.5;
+      const connectionParticles = projected.filter((_, i) => i % 3 === 0);
+      for (let i = 0; i < connectionParticles.length; i++) {
+        const a = connectionParticles[i];
+        for (let j = i + 1; j < connectionParticles.length; j++) {
+          const b = connectionParticles[j];
+          const dx = a.x3d - b.x3d;
+          const dy = a.y3d - b.y3d;
+          const dz = a.z3d - b.z3d;
+          const dist3d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          if (dist3d < CONNECTION_DIST) {
+            const fade = 1 - dist3d / CONNECTION_DIST;
+            // Flicker: connections form and dissolve
+            const flicker = Math.sin(time * 2 + a.u * 3 + b.u * 5) * 0.5 + 0.5;
+            const lineAlpha = fade * flicker * 0.15 * Math.max(0.2, (a.scale + b.scale) / 2);
+
+            if (lineAlpha > 0.01) {
+              const mixGold = (a.isGold || b.isGold);
+              if (mixGold) {
+                mctx.strokeStyle = `rgba(201, 168, 76, ${lineAlpha})`;
+              } else {
+                mctx.strokeStyle = `rgba(74, 158, 255, ${lineAlpha})`;
+              }
+              mctx.beginPath();
+              mctx.moveTo(a.sx, a.sy);
+              mctx.lineTo(b.sx, b.sy);
+              mctx.stroke();
+            }
+          }
+        }
+      }
+
+      // === DRAW PARTICLES ===
+      for (const p of projected) {
+        const r = p.isGold ? 201 : 74;
+        const g = p.isGold ? 168 : 158;
+        const b = p.isGold ? 76 : 255;
+
+        // Soft glow per particle
+        const glowSize = p.size * 4;
+        const glow = mctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, glowSize);
+        glow.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${p.alpha * 0.5})`);
+        glow.addColorStop(0.4, `rgba(${r}, ${g}, ${b}, ${p.alpha * 0.15})`);
+        glow.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+        mctx.fillStyle = glow;
+        mctx.fillRect(p.sx - glowSize, p.sy - glowSize, glowSize * 2, glowSize * 2);
+
+        // Core dot
+        mctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${p.alpha})`;
+        mctx.beginPath();
+        mctx.arc(p.sx, p.sy, p.size, 0, Math.PI * 2);
+        mctx.fill();
+      }
+
+      // === SPARKS ===
+      for (const spark of sparks) {
+        spark.life += spark.lifeSpeed;
+
+        if (spark.life > 1) {
+          // Reset spark
+          spark.life = 0;
+          spark.sourceU = Math.random() * Math.PI * 2;
+          spark.sourceV = (Math.random() - 0.5) * 0.4;
+          spark.orbitPhase = Math.random() * Math.PI * 2;
+          spark.state = 'orbiting';
+          spark.returnT = 0;
+        }
+
+        const sourcePt = getMobiusPoint(spark.sourceU, spark.sourceV);
+        let sparkX, sparkY, sparkZ;
+
+        if (spark.life < 0.7) {
+          // Orbiting phase
+          const orbitAngle = time * spark.orbitSpeed + spark.orbitPhase;
+          const r = spark.orbitRadius * Math.sin(spark.life * Math.PI); // grows then shrinks
+          sparkX = sourcePt.x + Math.cos(orbitAngle) * r;
+          sparkY = sourcePt.y + Math.sin(orbitAngle) * r * Math.cos(spark.orbitTilt);
+          sparkZ = sourcePt.z + Math.sin(orbitAngle) * r * Math.sin(spark.orbitTilt);
+        } else {
+          // Returning phase
+          const returnT = (spark.life - 0.7) / 0.3;
+          const eased = returnT * returnT;
+          const orbitAngle = time * spark.orbitSpeed + spark.orbitPhase;
+          const r = spark.orbitRadius * (1 - eased) * 0.3;
+          sparkX = lerp(sourcePt.x + Math.cos(orbitAngle) * r, sourcePt.x, eased);
+          sparkY = lerp(sourcePt.y + Math.sin(orbitAngle) * r, sourcePt.y, eased);
+          sparkZ = lerp(sourcePt.z + Math.sin(orbitAngle) * r * Math.sin(spark.orbitTilt), sourcePt.z, eased);
+        }
+
+        const proj = projectPoint(sparkX, sparkY, sparkZ, rotY, tiltX, parallaxX, parallaxY);
+        const sparkAlpha = Math.sin(spark.life * Math.PI) * 0.8;
+
+        if (sparkAlpha > 0.05) {
+          const r = spark.isGold ? 201 : 74;
+          const g = spark.isGold ? 168 : 158;
+          const b = spark.isGold ? 76 : 255;
+
+          // Spark glow
+          const sg = mctx.createRadialGradient(proj.sx, proj.sy, 0, proj.sx, proj.sy, 6);
+          sg.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${sparkAlpha * 0.6})`);
+          sg.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${sparkAlpha * 0.15})`);
+          sg.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+          mctx.fillStyle = sg;
+          mctx.fillRect(proj.sx - 6, proj.sy - 6, 12, 12);
+
+          // Spark core
+          mctx.fillStyle = `rgba(255, 255, 255, ${sparkAlpha * 0.8})`;
+          mctx.beginPath();
+          mctx.arc(proj.sx, proj.sy, spark.size * 0.6, 0, Math.PI * 2);
+          mctx.fill();
+        }
+      }
+
+      requestAnimationFrame(drawMobius);
+    }
+
+    drawMobius();
+  }
+
+  // === HUD NOTIFICATIONS ===
+  const hudMessages = [
+    { text: '> Scanning sector 7...', pos: 'top-left' },
+    { text: '> Anomaly detected: legacy ERP', pos: 'top-right' },
+    { text: '> Deploying countermeasures...', pos: 'bottom-left' },
+    { text: '> Market analysis: 94.2% confidence', pos: 'top-left' },
+    { text: '> Neural pathway optimization: +12%', pos: 'bottom-right' },
+    { text: '> Supply chain vulnerability mapped', pos: 'top-right' },
+    { text: '> Agent swarm: 6 active', pos: 'bottom-left' },
+    { text: '> Knowledge ingestion: 847 docs/sec', pos: 'top-left' },
+    { text: '> Competitive moat: reinforcing...', pos: 'bottom-right' },
+    { text: '> Target acquired: vertical SaaS', pos: 'top-right' },
+    { text: '> Inference pipeline: optimal', pos: 'bottom-left' },
+    { text: '> Quest objective: within range', pos: 'top-left' },
+  ];
+  let hudIdx = 0;
+  let hudStarted = false;
+
+  function startHudNotifications() {
+    if (hudStarted) return;
+    hudStarted = true;
+
+    function showNext() {
+      const msg = hudMessages[hudIdx % hudMessages.length];
+      hudIdx++;
+
+      const el = document.createElement('div');
+      el.className = `hud-notification ${msg.pos}`;
+      el.textContent = msg.text;
+      document.body.appendChild(el);
+
+      requestAnimationFrame(() => el.classList.add('visible'));
+
+      setTimeout(() => {
+        el.classList.add('fade-out');
+        setTimeout(() => el.remove(), 1000);
+      }, 3000 + Math.random() * 2000);
+
+      setTimeout(showNext, 4000 + Math.random() * 6000);
+    }
+    setTimeout(showNext, 2000);
+  }
+
+})();
+</script>
+</body>
+</html>
