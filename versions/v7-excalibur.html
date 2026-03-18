@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries — Drawn from the Impossible</title>
+<meta name="description" content="Galahad Industries — Enterprise AI software forged in impossible ambition.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@200;300;400&display=swap');
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    cursor: crosshair;
+    width: 100vw;
+    height: 100vh;
+  }
+  canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  'use strict';
+  const C = document.getElementById('c');
+  const X = C.getContext('2d');
+  let W, H, cx, cy, dpr;
+  let mx = -9999, my = -9999;
+
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    C.width = W * dpr; C.height = H * dpr;
+    X.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2; cy = H / 2;
+  }
+  addEventListener('resize', resize); resize();
+  addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+  addEventListener('touchmove', e => { mx = e.touches[0].clientX; my = e.touches[0].clientY; }, { passive: true });
+
+  // --- EASING ---
+  const ease = {
+    inQuad: t => t * t,
+    outQuart: t => 1 - (1 - t) ** 4,
+    outExpo: t => t === 1 ? 1 : 1 - 2 ** (-10 * t),
+    outBack: t => { const c = 2.70158; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; },
+    inOutCubic: t => t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2,
+  };
+
+  // --- CODE FRAGMENTS for stone texture ---
+  const codeFrags = [
+    '0x4F', 'fn()', '>>>', '&&', '0b1', '[];', '===', '{}',
+    'nil', ':::', '/*', '*/', '>>1', 'pub', 'mut', 'u8',
+    '0xFF', '=>', '|>', '...', '+=', '!=', '<<', 'mod',
+  ];
+
+  // --- TIMING ---
+  const T0 = performance.now();
+  let phase = 0; // 0=dormant 1=pull 2=burst 3=rise 4=ambient
+  let pullT = 0, burstT = 0, riseT = 0, ambientT = 0;
+  let flashAlpha = 0;
+  let textAlpha = 0;
+  let taglineAlpha = 0;
+  let burstFired = false, riseFired = false, ambientFired = false;
+
+  // --- STONE ---
+  const STONE_N = 1200;
+  const stone = [];
+  const stoneCenter = { x: 0, y: 0 };
+
+  function buildStone() {
+    stone.length = 0;
+    const sw = Math.min(W * 0.38, 360);
+    const sh = Math.min(H * 0.2, 160);
+    stoneCenter.x = cx;
+    stoneCenter.y = H * 0.73;
+
+    for (let i = 0; i < STONE_N; i++) {
+      // Rough trapezoid — wider at base, narrower top, irregular
+      const ny = Math.random(); // 0 = top, 1 = bottom
+      const taper = 0.5 + ny * 0.5; // wider at bottom
+      const nx = (Math.random() - 0.5) * 2 * taper;
+      // Add noise for irregular edges
+      const edgeNoise = 1 - 0.15 * Math.sin(nx * 8 + ny * 6);
+
+      const hx = stoneCenter.x + nx * sw * 0.5 * edgeNoise;
+      const hy = stoneCenter.y + (ny - 0.5) * sh * edgeNoise;
+
+      // Dense packing: smaller particles, more of them
+      const isCodeFrag = Math.random() < 0.06;
+      stone.push({
+        hx, hy, x: hx, y: hy,
+        vx: 0, vy: 0,
+        size: isCodeFrag ? 0 : (0.8 + Math.random() * 2.8),
+        shade: 0.12 + Math.random() * 0.18,
+        blueTint: 0.02 + Math.random() * 0.08,
+        rot: Math.random() * Math.PI * 2,
+        isCode: isCodeFrag,
+        codeTxt: isCodeFrag ? codeFrags[Math.floor(Math.random() * codeFrags.length)] : '',
+        scattered: false,
+        // orbit params for post-burst
+        orbAngle: Math.random() * Math.PI * 2,
+        orbSpeed: (Math.random() - 0.5) * 0.002,
+        orbR: 0,
+        // For text-target particles
+        txtTarget: null,
+        morphT: 0,
+      });
+    }
+  }
+
+  // --- SWORD ---
+  const swd = {
+    ex: 0, ey: 0, // embed pos
+    x: 0, y: 0,   // current
+    rx: 0, ry: 0, // rest pos
+    len: 0,
+    glow: 0.25,
+    rot: 0,
+  };
+
+  function initSword() {
+    swd.ex = cx; swd.ey = stoneCenter.y - 25;
+    swd.x = swd.ex; swd.y = swd.ey;
+    swd.rx = cx; swd.ry = cy - H * 0.06;
+    swd.len = Math.min(H * 0.3, 240);
+  }
+
+  // --- TEXT PARTICLES ---
+  // We sample "GALAHAD INDUSTRIES" from a hidden canvas to get pixel positions
+  let textTargets = [];
+  let taglineTargets = [];
+
+  function sampleText(text, font, yOffset, scale) {
+    const tc = document.createElement('canvas');
+    const tx = tc.getContext('2d');
+    tc.width = W * 0.8; tc.height = 120;
+    tx.clearRect(0, 0, tc.width, tc.height);
+    tx.fillStyle = '#fff';
+    tx.font = font;
+    tx.textAlign = 'center';
+    tx.textBaseline = 'middle';
+    tx.fillText(text, tc.width / 2, 60);
+
+    const data = tx.getImageData(0, 0, tc.width, tc.height).data;
+    const pts = [];
+    const step = Math.max(2, Math.floor(3 / scale));
+    for (let y = 0; y < tc.height; y += step) {
+      for (let x = 0; x < tc.width; x += step) {
+        if (data[(y * tc.width + x) * 4 + 3] > 128) {
+          pts.push({
+            x: (x - tc.width / 2) * scale + cx,
+            y: (y - 60) * scale + yOffset
+          });
+        }
+      }
+    }
+    return pts;
+  }
+
+  function buildTextTargets() {
+    const titleSize = Math.min(W * 0.06, 56);
+    textTargets = sampleText(
+      'GALAHAD INDUSTRIES',
+      `600 ${titleSize}px "Cormorant Garamond", Georgia, serif`,
+      cy - 10,
+      1
+    );
+    const tagSize = Math.min(W * 0.018, 18);
+    taglineTargets = sampleText(
+      'Drawn from the impossible.',
+      `italic 300 ${tagSize}px "Cormorant Garamond", Georgia, serif`,
+      cy + titleSize * 0.7,
+      1
+    );
+  }
+
+  // --- BURST PARTICLES ---
+  const bursts = [];
+  function spawnBurst(bx, by, n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 2 + Math.random() * 14;
+      bursts.push({
+        x: bx, y: by,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - Math.random() * 4,
+        life: 1, decay: 0.004 + Math.random() * 0.018,
+        size: 0.8 + Math.random() * 3.5,
+        gold: Math.random() > 0.35,
+      });
+    }
+  }
+
+  // --- ENERGY RINGS ---
+  const rings = [];
+  function spawnRing(rx, ry, maxR, spd, lw) {
+    rings.push({ x: rx, y: ry, r: 0, maxR: maxR || Math.max(W, H) * 0.7, spd: spd || 3, op: 1, lw: lw || 2 });
+  }
+
+  // --- SPARKS ---
+  const sparks = [];
+  function spawnSpark(sx, sy) {
+    sparks.push({
+      x: sx, y: sy,
+      vx: (Math.random() - 0.5) * 2,
+      vy: -Math.random() * 3 - 0.5,
+      life: 1, decay: 0.008 + Math.random() * 0.025,
+      size: 0.4 + Math.random() * 1.8,
+    });
+  }
+
+  // --- CURSOR TRAIL ---
+  const trail = [];
+
+  // --- DUST (ambient floating) ---
+  const dust = [];
+  function initDust() {
+    for (let i = 0; i < 60; i++) {
+      dust.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.2,
+        vy: -Math.random() * 0.3 - 0.05,
+        size: 0.3 + Math.random() * 0.8,
+        alpha: 0.05 + Math.random() * 0.15,
+      });
+    }
+  }
+
+  // --- DRAW: SWORD ---
+  function drawSword(sx, sy, len, glow, rot) {
+    X.save();
+    X.translate(sx, sy);
+    X.rotate(rot);
+
+    const bw = 5; // blade half-width at base
+    const guardW = 44;
+    const guardH = 10;
+    const gripH = len * 0.2;
+    const pomR = 7;
+    const tipY = -len;
+
+    // MASSIVE outer aura
+    const auraR = 120 * glow;
+    const aura = X.createRadialGradient(0, tipY * 0.4, 0, 0, tipY * 0.4, auraR);
+    aura.addColorStop(0, `rgba(201,168,76,${0.12 * glow})`);
+    aura.addColorStop(0.6, `rgba(201,168,76,${0.03 * glow})`);
+    aura.addColorStop(1, 'rgba(201,168,76,0)');
+    X.fillStyle = aura;
+    X.fillRect(-auraR, tipY - auraR * 0.5, auraR * 2, len + gripH + auraR);
+
+    // Blade wide glow
+    X.shadowColor = `rgba(201,168,76,${0.7 * glow})`;
+    X.shadowBlur = 40 * glow;
+    const bladeG = X.createLinearGradient(0, tipY, 0, 0);
+    bladeG.addColorStop(0, `rgba(255,255,255,${0.95 * glow})`);
+    bladeG.addColorStop(0.4, `rgba(255,248,220,${0.75 * glow})`);
+    bladeG.addColorStop(1, `rgba(201,168,76,${0.45 * glow})`);
+    X.fillStyle = bladeG;
+    X.beginPath();
+    X.moveTo(0, tipY);
+    X.lineTo(-bw, 0);
+    X.lineTo(bw, 0);
+    X.closePath();
+    X.fill();
+
+    // Core white-hot blade
+    X.shadowColor = `rgba(255,255,255,${0.9 * glow})`;
+    X.shadowBlur = 20 * glow;
+    X.fillStyle = `rgba(255,255,255,${glow})`;
+    X.beginPath();
+    X.moveTo(0, tipY);
+    X.lineTo(-bw * 0.3, 0);
+    X.lineTo(bw * 0.3, 0);
+    X.closePath();
+    X.fill();
+
+    // Edge highlights — thin bright lines on blade edges
+    X.shadowBlur = 0;
+    X.strokeStyle = `rgba(255,255,255,${0.4 * glow})`;
+    X.lineWidth = 0.5;
+    X.beginPath(); X.moveTo(0, tipY); X.lineTo(-bw * 0.6, 0); X.stroke();
+    X.beginPath(); X.moveTo(0, tipY); X.lineTo(bw * 0.6, 0); X.stroke();
+
+    // Crossguard
+    X.shadowColor = `rgba(201,168,76,${0.9 * glow})`;
+    X.shadowBlur = 25 * glow;
+    const gG = X.createLinearGradient(-guardW / 2, 0, guardW / 2, 0);
+    gG.addColorStop(0, `rgba(150,120,50,${0.3 * glow})`);
+    gG.addColorStop(0.35, `rgba(255,235,170,${0.9 * glow})`);
+    gG.addColorStop(0.5, `rgba(255,255,255,${glow})`);
+    gG.addColorStop(0.65, `rgba(255,235,170,${0.9 * glow})`);
+    gG.addColorStop(1, `rgba(150,120,50,${0.3 * glow})`);
+    X.fillStyle = gG;
+    X.beginPath();
+    X.ellipse(0, 0, guardW / 2, guardH / 2, 0, 0, Math.PI * 2);
+    X.fill();
+
+    // Lens flare at crossguard
+    const fI = glow * (0.6 + 0.4 * Math.sin(performance.now() * 0.003));
+    const fG = X.createRadialGradient(0, 0, 0, 0, 0, 60 * fI);
+    fG.addColorStop(0, `rgba(255,255,255,${0.8 * fI})`);
+    fG.addColorStop(0.15, `rgba(255,250,220,${0.35 * fI})`);
+    fG.addColorStop(0.5, `rgba(201,168,76,${0.08 * fI})`);
+    fG.addColorStop(1, 'rgba(201,168,76,0)');
+    X.shadowBlur = 0;
+    X.fillStyle = fG;
+    X.fillRect(-70, -70, 140, 140);
+
+    // Horizontal lens streak
+    X.globalAlpha = 0.35 * fI;
+    const streakW = 120 * fI;
+    const sG = X.createLinearGradient(-streakW, 0, streakW, 0);
+    sG.addColorStop(0, 'rgba(255,245,200,0)');
+    sG.addColorStop(0.4, `rgba(255,245,200,${0.5 * fI})`);
+    sG.addColorStop(0.5, `rgba(255,255,255,${0.7 * fI})`);
+    sG.addColorStop(0.6, `rgba(255,245,200,${0.5 * fI})`);
+    sG.addColorStop(1, 'rgba(255,245,200,0)');
+    X.fillStyle = sG;
+    X.fillRect(-streakW, -2, streakW * 2, 4);
+    X.globalAlpha = 1;
+
+    // Vertical streak (subtle)
+    X.globalAlpha = 0.15 * fI;
+    X.fillStyle = `rgba(255,255,255,${0.3 * fI})`;
+    X.fillRect(-1, tipY, 2, len * 0.4);
+    X.globalAlpha = 1;
+
+    // Grip
+    const grG = X.createLinearGradient(0, guardH / 2, 0, gripH);
+    grG.addColorStop(0, `rgba(201,168,76,${0.55 * glow})`);
+    grG.addColorStop(0.5, `rgba(120,95,40,${0.4 * glow})`);
+    grG.addColorStop(1, `rgba(150,120,50,${0.5 * glow})`);
+    X.fillStyle = grG;
+    X.fillRect(-3.5, guardH / 2, 7, gripH - guardH / 2);
+
+    // Grip wrapping texture
+    X.strokeStyle = `rgba(201,168,76,${0.2 * glow})`;
+    X.lineWidth = 1;
+    for (let gy = guardH / 2 + 4; gy < gripH - 4; gy += 8) {
+      X.beginPath();
+      X.moveTo(-4, gy); X.lineTo(4, gy + 3);
+      X.stroke();
+    }
+
+    // Pommel
+    X.beginPath();
+    X.arc(0, gripH, pomR, 0, Math.PI * 2);
+    X.fillStyle = `rgba(201,168,76,${0.65 * glow})`;
+    X.shadowColor = `rgba(201,168,76,${0.5 * glow})`;
+    X.shadowBlur = 12 * glow;
+    X.fill();
+    X.shadowBlur = 0;
+
+    // Pommel gem
+    X.beginPath();
+    X.arc(0, gripH, pomR * 0.4, 0, Math.PI * 2);
+    X.fillStyle = `rgba(255,255,255,${0.6 * glow})`;
+    X.fill();
+
+    X.restore();
+  }
+
+  // --- DRAW: STONE ---
+  function drawStone(time) {
+    for (let i = 0; i < stone.length; i++) {
+      const p = stone[i];
+      let r, g, b, a;
+
+      if (p.txtTarget && p.morphT > 0) {
+        // Morphing to gold for text
+        const m = Math.min(p.morphT, 1);
+        r = Math.floor((1 - m) * p.shade * 255 + m * 201);
+        g = Math.floor((1 - m) * p.shade * 255 + m * 168);
+        b = Math.floor((1 - m) * (p.shade * 255 + p.blueTint * 200) + m * 76);
+        a = 0.5 + m * 0.5;
+      } else {
+        const s = p.shade * 255;
+        r = Math.floor(s);
+        g = Math.floor(s);
+        b = Math.floor(s + p.blueTint * 200);
+        a = 0.65 + p.shade * 0.35;
+      }
+
+      // Shake during pull
+      let shX = 0, shY = 0;
+      if (phase === 1) {
+        const shk = pullT * pullT * 5;
+        shX = (Math.random() - 0.5) * shk;
+        shY = (Math.random() - 0.5) * shk;
+      }
+
+      const dx = p.x + shX;
+      const dy = p.y + shY;
+
+      if (p.isCode) {
+        // Code fragment text
+        X.fillStyle = `rgba(${r},${g},${b},${a * 0.6})`;
+        X.font = '8px monospace';
+        X.fillText(p.codeTxt, dx, dy);
+      } else if (p.size > 2) {
+        // Angular chunk
+        X.save();
+        X.translate(dx, dy);
+        X.rotate(p.rot + time * 0.00005);
+        X.fillStyle = `rgba(${r},${g},${b},${a})`;
+        X.fillRect(-p.size / 2, -p.size * 0.35, p.size, p.size * 0.7);
+        X.restore();
+      } else {
+        X.fillStyle = `rgba(${r},${g},${b},${a})`;
+        X.fillRect(dx - p.size / 2, dy - p.size / 2, p.size, p.size);
+      }
+    }
+  }
+
+  // --- DRAW: RINGS ---
+  function drawRings() {
+    for (const r of rings) {
+      if (r.op <= 0) continue;
+      X.beginPath();
+      X.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+      X.strokeStyle = `rgba(201,168,76,${r.op * 0.35})`;
+      X.lineWidth = r.lw * r.op;
+      X.stroke();
+    }
+  }
+
+  // --- DRAW: BURSTS ---
+  function drawBursts() {
+    for (const p of bursts) {
+      if (p.life <= 0) continue;
+      const c = p.gold ? `rgba(201,168,76,${p.life})` : `rgba(255,255,255,${p.life})`;
+      X.fillStyle = c;
+      X.shadowColor = p.gold ? `rgba(201,168,76,${p.life * 0.5})` : `rgba(255,255,255,${p.life * 0.5})`;
+      X.shadowBlur = 8 * p.life;
+      X.beginPath();
+      X.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      X.fill();
+    }
+    X.shadowBlur = 0;
+  }
+
+  // --- DRAW: SPARKS ---
+  function drawSparks() {
+    for (const s of sparks) {
+      if (s.life <= 0) continue;
+      X.fillStyle = `rgba(255,245,200,${s.life * 0.7})`;
+      X.shadowColor = `rgba(201,168,76,${s.life * 0.3})`;
+      X.shadowBlur = 5;
+      X.beginPath();
+      X.arc(s.x, s.y, s.size * s.life, 0, Math.PI * 2);
+      X.fill();
+    }
+    X.shadowBlur = 0;
+  }
+
+  // --- DRAW: TRAIL ---
+  function drawTrail() {
+    for (const t of trail) {
+      X.fillStyle = `rgba(201,168,76,${t.life * 0.4})`;
+      X.shadowColor = `rgba(201,168,76,${t.life * 0.3})`;
+      X.shadowBlur = 10 * t.life;
+      X.beginPath();
+      X.arc(t.x, t.y, 2.5 * t.life, 0, Math.PI * 2);
+      X.fill();
+    }
+    X.shadowBlur = 0;
+  }
+
+  // --- DRAW: DUST ---
+  function drawDust() {
+    for (const d of dust) {
+      X.fillStyle = `rgba(180,170,150,${d.alpha})`;
+      X.fillRect(d.x, d.y, d.size, d.size);
+    }
+  }
+
+  // --- DRAW: TEXT (canvas-rendered for glow control) ---
+  function drawText() {
+    if (textAlpha <= 0) return;
+
+    // Title: GALAHAD
+    const titleSize = Math.min(W * 0.06, 56);
+    X.save();
+    X.globalAlpha = textAlpha;
+    X.fillStyle = '#c9a84c';
+    X.shadowColor = `rgba(201,168,76,${0.35 * textAlpha})`;
+    X.shadowBlur = 60;
+    X.font = `600 ${titleSize}px "Cormorant Garamond", Georgia, serif`;
+    X.textAlign = 'center';
+    X.textBaseline = 'middle';
+    X.letterSpacing = '0.22em';
+
+    // Render letter by letter for spacing control
+    const titleText = 'GALAHAD';
+    const spacing = titleSize * 0.28;
+    const subtitleText = 'INDUSTRIES';
+    const subSize = titleSize * 0.32;
+    const subSpacing = subSize * 0.55;
+
+    // Measure and draw GALAHAD
+    X.font = `600 ${titleSize}px "Cormorant Garamond", Georgia, serif`;
+    const titleW = X.measureText(titleText).width + spacing * (titleText.length - 1);
+    let tx = cx - titleW / 2;
+    for (const ch of titleText) {
+      const chW = X.measureText(ch).width;
+      X.fillText(ch, tx + chW / 2, cy - 10);
+      tx += chW + spacing;
+    }
+
+    // INDUSTRIES subtitle
+    X.shadowBlur = 0;
+    X.fillStyle = `rgba(255,255,255,${0.5 * textAlpha})`;
+    X.font = `200 ${subSize}px "Inter", sans-serif`;
+    const subW = X.measureText(subtitleText).width + subSpacing * (subtitleText.length - 1);
+    tx = cx - subW / 2;
+    for (const ch of subtitleText) {
+      const chW = X.measureText(ch).width;
+      X.fillText(ch, tx + chW / 2, cy + titleSize * 0.45);
+      tx += chW + subSpacing;
+    }
+
+    X.restore();
+
+    // Tagline
+    if (taglineAlpha > 0) {
+      X.save();
+      X.globalAlpha = taglineAlpha;
+      X.fillStyle = `rgba(255,255,255,0.35)`;
+      X.font = `italic 300 ${Math.min(W * 0.018, 18)}px "Cormorant Garamond", Georgia, serif`;
+      X.textAlign = 'center';
+      X.fillText('Drawn from the impossible.', cx, cy + titleSize * 1.1);
+      X.restore();
+    }
+  }
+
+  // --- UPDATE ---
+  let lastRingT = 0;
+  let pullSparksT = 0;
+
+  function update(time) {
+    const el = (time - T0) / 1000;
+
+    // --- PHASE MANAGEMENT ---
+    if (el < 1.8) {
+      phase = 0;
+      // Dormant — sword pulses faintly in stone
+      swd.glow = 0.2 + 0.08 * Math.sin(time * 0.002);
+    } else if (el < 5.5) {
+      phase = 1;
+      // Pull with escalating resistance
+      const raw = (el - 1.8) / 3.7;
+      // Slow start, accelerating — like pulling against friction
+      pullT = raw < 0.7 ? ease.inQuad(raw / 0.7) * 0.7 : 0.7 + ease.outExpo((raw - 0.7) / 0.3) * 0.3;
+
+      // Sword jitters and strains
+      const strain = pullT * 60;
+      const jitter = Math.sin(time * 0.025) * pullT * 5 * (1 + pullT * 2);
+      const microShake = (Math.random() - 0.5) * pullT * pullT * 8;
+      swd.x = swd.ex + jitter + microShake;
+      swd.y = swd.ey - strain;
+      swd.glow = 0.2 + pullT * 0.7;
+
+      // Sparks fly from stone during pull
+      if (time - pullSparksT > 80 - pullT * 60) {
+        pullSparksT = time;
+        const sparkCount = Math.floor(1 + pullT * 4);
+        for (let i = 0; i < sparkCount; i++) {
+          spawnSpark(
+            swd.x + (Math.random() - 0.5) * 30,
+            stoneCenter.y - 30 + (Math.random() - 0.5) * 20
+          );
+        }
+      }
+
+      // Small energy bursts near end of pull
+      if (pullT > 0.8 && Math.random() < 0.15) {
+        spawnBurst(swd.x + (Math.random() - 0.5) * 20, swd.y + swd.len * 0.5, 3);
+      }
+    } else if (el < 7) {
+      // BURST MOMENT
+      if (!burstFired) {
+        burstFired = true;
+        phase = 2;
+        flashAlpha = 1.2;
+        spawnBurst(swd.ex, swd.ey - 50, 350);
+        spawnRing(swd.ex, swd.ey - 50, Math.max(W, H) * 0.9, 6, 3);
+        spawnRing(swd.ex, swd.ey - 50, Math.max(W, H) * 0.7, 4, 2);
+        spawnRing(swd.ex, swd.ey - 50, Math.max(W, H) * 0.5, 2.5, 1.5);
+
+        // SCATTER all stone particles
+        for (const p of stone) {
+          p.scattered = true;
+          const ddx = p.x - swd.ex;
+          const ddy = p.y - swd.ey;
+          const dist = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+          const force = 4 + Math.random() * 10;
+          p.vx = (ddx / dist) * force + (Math.random() - 0.5) * 3;
+          p.vy = (ddy / dist) * force - Math.random() * 7;
+        }
+      }
+
+      burstT = ease.outExpo((el - 5.5) / 1.5);
+      const lift = burstT * 120;
+      swd.y = swd.ey - 60 - lift;
+      swd.x = swd.ex;
+      swd.glow = 0.9 + burstT * 0.3;
+    } else if (el < 9.5) {
+      if (!riseFired) {
+        riseFired = true;
+        phase = 3;
+      }
+      riseT = ease.outBack(Math.min((el - 7) / 2.5, 1));
+      const startY = swd.ey - 180;
+      swd.x = cx;
+      swd.y = startY + (swd.ry - startY) * riseT;
+      swd.glow = 1.0 + 0.15 * Math.sin(time * 0.004);
+      swd.rot = 0;
+
+      // Text fades in as sword arrives
+      textAlpha = Math.min(Math.max((el - 8) / 1.5, 0), 1);
+    } else {
+      if (!ambientFired) {
+        ambientFired = true;
+        phase = 4;
+      }
+      // Ambient phase — everything settles
+      const ambEl = el - 9.5;
+
+      // Sword gentle pulse and micro-rotation
+      swd.glow = 0.7 + 0.3 * Math.sin(time * 0.0015);
+      swd.rot = Math.sin(time * 0.0004) * 0.015;
+      swd.x = cx;
+      swd.y = swd.ry + Math.sin(time * 0.001) * 3; // gentle float
+
+      // Text fully visible
+      textAlpha = 1;
+      taglineAlpha = Math.min(Math.max((ambEl - 0.5) / 1.5, 0), 1);
+
+      // Periodic energy rings
+      if (time - lastRingT > 5000) {
+        lastRingT = time;
+        spawnRing(swd.x, swd.y, Math.max(W, H) * 0.45, 1.2, 1);
+      }
+    }
+
+    // Mouse proximity brightens sword
+    if (phase >= 3) {
+      const ddx = mx - swd.x;
+      const ddy = my - swd.y;
+      const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+      const prox = Math.max(0, 1 - dist / 280);
+      swd.glow = Math.min(swd.glow + prox * 0.5, 1.5);
+      // Extra sparks near cursor when close to sword
+      if (prox > 0.3 && Math.random() < prox * 0.4) {
+        spawnSpark(mx + (Math.random() - 0.5) * 20, my + (Math.random() - 0.5) * 20);
+      }
+    }
+
+    // Flash decay
+    if (flashAlpha > 0) {
+      flashAlpha *= 0.88;
+      if (flashAlpha < 0.005) flashAlpha = 0;
+    }
+
+    // --- UPDATE STONE PARTICLES ---
+    for (const p of stone) {
+      if (p.scattered) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.975;
+        p.vy *= 0.975;
+        p.vy += 0.015;
+
+        // In ambient phase, orbit at bottom
+        if (phase >= 4 && !p.txtTarget) {
+          p.orbAngle += p.orbSpeed;
+          const targR = 80 + Math.abs(Math.sin(p.orbAngle * 3)) * 250;
+          p.orbR += (targR - p.orbR) * 0.002;
+          const orbCY = H * 0.88;
+          const tgx = cx + Math.cos(p.orbAngle) * p.orbR;
+          const tgy = orbCY + Math.sin(p.orbAngle) * p.orbR * 0.25;
+          p.x += (tgx - p.x) * 0.008;
+          p.y += (tgy - p.y) * 0.008;
+        }
+
+        // Text target morphing
+        if (p.txtTarget && phase >= 4) {
+          p.morphT = Math.min(p.morphT + 0.008, 1);
+          const m = ease.outQuart(p.morphT);
+          p.x += (p.txtTarget.x - p.x) * 0.02 * m;
+          p.y += (p.txtTarget.y - p.y) * 0.02 * m;
+          p.vx *= 0.9;
+          p.vy *= 0.9;
+        }
+      }
+    }
+
+    // --- UPDATE BURSTS ---
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const p = bursts[i];
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.98; p.vy *= 0.98;
+      p.vy += 0.02;
+      p.life -= p.decay;
+      if (p.life <= 0) bursts.splice(i, 1);
+    }
+
+    // --- UPDATE RINGS ---
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const r = rings[i];
+      r.r += r.spd;
+      r.op = Math.max(0, 1 - r.r / r.maxR);
+      if (r.op <= 0) rings.splice(i, 1);
+    }
+
+    // --- UPDATE SPARKS ---
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const s = sparks[i];
+      s.x += s.vx; s.y += s.vy;
+      s.vy -= 0.01;
+      s.life -= s.decay;
+      if (s.life <= 0) sparks.splice(i, 1);
+    }
+
+    // --- AMBIENT SPARKS from sword ---
+    if (phase >= 3 && Math.random() < 0.35) {
+      spawnSpark(
+        swd.x + (Math.random() - 0.5) * 12,
+        swd.y - swd.len * Math.random()
+      );
+    }
+
+    // --- CURSOR TRAIL ---
+    if (mx > -999) {
+      trail.push({ x: mx, y: my, life: 1 });
+    }
+    for (let i = trail.length - 1; i >= 0; i--) {
+      trail[i].life -= 0.035;
+      if (trail[i].life <= 0) trail.splice(i, 1);
+    }
+
+    // --- DUST ---
+    for (const d of dust) {
+      d.x += d.vx; d.y += d.vy;
+      if (d.y < -5) { d.y = H + 5; d.x = Math.random() * W; }
+      if (d.x < -5 || d.x > W + 5) d.x = Math.random() * W;
+    }
+  }
+
+  // --- RENDER ---
+  function render(time) {
+    X.clearRect(0, 0, W, H);
+
+    // Background
+    const bg = X.createRadialGradient(cx, H * 0.55, 0, cx, H * 0.55, H * 1.1);
+    bg.addColorStop(0, '#08080e');
+    bg.addColorStop(0.5, '#050508');
+    bg.addColorStop(1, '#000000');
+    X.fillStyle = bg;
+    X.fillRect(0, 0, W, H);
+
+    // Dust
+    drawDust();
+
+    // Stone particles
+    drawStone(time);
+
+    // Energy rings (behind sword)
+    drawRings();
+
+    // Burst particles
+    drawBursts();
+
+    // Sparks (behind sword)
+    drawSparks();
+
+    // SWORD
+    drawSword(swd.x, swd.y, swd.len, swd.glow, swd.rot);
+
+    // Stone occlusion over sword base (phases 0-1 only)
+    if (phase <= 1 && !burstFired) {
+      const occY = stoneCenter.y - 80;
+      const occH = 50;
+      const oG = X.createLinearGradient(0, occY, 0, occY + occH);
+      oG.addColorStop(0, 'rgba(8,8,14,0)');
+      oG.addColorStop(0.5, 'rgba(8,8,14,0.6)');
+      oG.addColorStop(1, 'rgba(8,8,14,0.9)');
+      X.fillStyle = oG;
+      X.fillRect(cx - 200, occY, 400, occH);
+    }
+
+    // Ground glow (post-burst)
+    if (phase >= 2) {
+      const gG = X.createRadialGradient(cx, H * 0.73, 0, cx, H * 0.73, 250);
+      const gA = phase >= 4 ? 0.06 : 0.12 * burstT;
+      gG.addColorStop(0, `rgba(201,168,76,${gA})`);
+      gG.addColorStop(1, 'rgba(201,168,76,0)');
+      X.fillStyle = gG;
+      X.fillRect(cx - 300, H * 0.73 - 250, 600, 500);
+    }
+
+    // Vignette
+    const vig = X.createRadialGradient(cx, cy, H * 0.25, cx, cy, H * 0.95);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.6)');
+    X.fillStyle = vig;
+    X.fillRect(0, 0, W, H);
+
+    // Text (canvas-rendered)
+    drawText();
+
+    // Cursor trail
+    drawTrail();
+
+    // Screen flash
+    if (flashAlpha > 0) {
+      const fG = X.createRadialGradient(swd.ex, swd.ey - 50, 0, swd.ex, swd.ey - 50, Math.max(W, H));
+      fG.addColorStop(0, `rgba(255,255,255,${flashAlpha * 0.8})`);
+      fG.addColorStop(0.3, `rgba(255,245,200,${flashAlpha * 0.4})`);
+      fG.addColorStop(0.7, `rgba(201,168,76,${flashAlpha * 0.1})`);
+      fG.addColorStop(1, 'rgba(0,0,0,0)');
+      X.fillStyle = fG;
+      X.fillRect(0, 0, W, H);
+    }
+  }
+
+  // --- INIT ---
+  buildStone();
+  initSword();
+  initDust();
+
+  addEventListener('resize', () => {
+    buildStone();
+    initSword();
+    buildTextTargets();
+    // Re-assign text targets
+    assignTextTargets();
+  });
+
+  // Build text targets after fonts load
+  function assignTextTargets() {
+    if (textTargets.length === 0) return;
+    // Assign some stone particles to text positions
+    const available = stone.filter(p => !p.isCode);
+    const needed = Math.min(textTargets.length, Math.floor(available.length * 0.3));
+    const step = Math.max(1, Math.floor(textTargets.length / needed));
+    let ai = 0;
+    for (let i = 0; i < textTargets.length && ai < available.length; i += step) {
+      available[ai].txtTarget = textTargets[i];
+      ai++;
+    }
+  }
+
+  // Fonts might not be loaded yet — try after a brief delay
+  setTimeout(() => {
+    buildTextTargets();
+    assignTextTargets();
+  }, 500);
+
+  // Also try with font load event
+  document.fonts.ready.then(() => {
+    buildTextTargets();
+    assignTextTargets();
+  });
+
+  function loop(time) {
+    update(time);
+    render(time);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
