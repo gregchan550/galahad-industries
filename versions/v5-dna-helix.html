@@ -1,0 +1,956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries — Encoded for Purpose</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #ffffff;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    cursor: grab;
+  }
+
+  body:active { cursor: grabbing; }
+
+  #canvas-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+  }
+
+  canvas { display: block; }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .title {
+    font-size: clamp(2rem, 5vw, 4.5rem);
+    font-weight: 200;
+    letter-spacing: clamp(0.8rem, 3vw, 2.5rem);
+    text-transform: uppercase;
+    color: #ffffff;
+    text-align: center;
+    line-height: 1.2;
+    text-shadow: 0 0 60px rgba(74, 158, 255, 0.15), 0 0 120px rgba(201, 168, 76, 0.1);
+    opacity: 0;
+    animation: fadeIn 2s ease-out 0.5s forwards;
+  }
+
+  .tagline {
+    font-size: clamp(0.75rem, 1.5vw, 1.1rem);
+    font-weight: 300;
+    letter-spacing: clamp(0.3rem, 1vw, 0.8rem);
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 1.5rem;
+    opacity: 0;
+    animation: fadeIn 2s ease-out 1.5s forwards;
+  }
+
+  .depth-top, .depth-bottom {
+    position: fixed;
+    left: 0;
+    width: 100%;
+    height: 20vh;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  .depth-top {
+    top: 0;
+    background: linear-gradient(to bottom, #0a0a0a 0%, #0a0a0a 20%, transparent 100%);
+  }
+
+  .depth-bottom {
+    bottom: 0;
+    background: linear-gradient(to top, #0a0a0a 0%, #0a0a0a 20%, transparent 100%);
+  }
+
+  .vignette {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 4;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(10,10,10,0.6) 100%);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .code-hint {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    font-size: 0.65rem;
+    letter-spacing: 0.3rem;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.15);
+    pointer-events: none;
+    opacity: 0;
+    animation: fadeIn 2s ease-out 3s forwards;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<div class="depth-top"></div>
+<div class="depth-bottom"></div>
+<div class="vignette"></div>
+
+<div class="overlay">
+  <div class="title">Galahad<br>Industries</div>
+  <div class="tagline">Encoded for purpose.</div>
+</div>
+
+<div class="code-hint">The code is in the structure</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // --- CONFIG ---
+  const GOLD = new THREE.Color(0xc9a84c);
+  const BLUE = new THREE.Color(0x4a9eff);
+  const BG = new THREE.Color(0x0a0a0a);
+
+  const HELIX_RADIUS = 2.8;
+  const HELIX_HEIGHT = 28;
+  const HELIX_TURNS = 5;
+  const POINTS_PER_STRAND = 220;
+  const RUNGS_COUNT = 60;
+  const RUNG_PARTICLES = 8;
+  const ROTATION_SPEED = 0.08;
+  const ASSEMBLY_SPEED = 0.4;
+  const DRIFT_PARTICLES = 40;
+
+  const VALUES = [
+    'INTEGRITY', 'PRECISION', 'INNOVATION', 'LEGACY', 'PURPOSE',
+    'COURAGE', 'DISCIPLINE', 'HONOR', 'VISION', 'RESOLVE',
+    'MASTERY', 'TRUTH', 'SERVICE', 'EXCELLENCE', 'FORTITUDE'
+  ];
+
+  // --- SETUP ---
+  const container = document.getElementById('canvas-container');
+  const scene = new THREE.Scene();
+  scene.background = BG;
+  scene.fog = new THREE.FogExp2(0x0a0a0a, 0.035);
+
+  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 0, 10);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  // --- HELIX GROUP ---
+  const helixGroup = new THREE.Group();
+  scene.add(helixGroup);
+
+  // --- PARTICLE MATERIAL (shared) ---
+  const particleTexture = generateParticleTexture();
+
+  function generateParticleTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255,255,255,1)');
+    gradient.addColorStop(0.3, 'rgba(255,255,255,0.8)');
+    gradient.addColorStop(0.7, 'rgba(255,255,255,0.15)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    const tex = new THREE.CanvasTexture(canvas);
+    return tex;
+  }
+
+  // --- STRAND PARTICLES ---
+  function createStrandGeometry(phaseOffset) {
+    const positions = new Float32Array(POINTS_PER_STRAND * 3);
+    const alphas = new Float32Array(POINTS_PER_STRAND);
+
+    for (let i = 0; i < POINTS_PER_STRAND; i++) {
+      const t = i / POINTS_PER_STRAND;
+      const angle = t * Math.PI * 2 * HELIX_TURNS + phaseOffset;
+      const y = (t - 0.5) * HELIX_HEIGHT;
+
+      positions[i * 3] = Math.cos(angle) * HELIX_RADIUS;
+      positions[i * 3 + 1] = y;
+      positions[i * 3 + 2] = Math.sin(angle) * HELIX_RADIUS;
+      alphas[i] = 1.0;
+    }
+
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('alpha', new THREE.BufferAttribute(alphas, 1));
+    return geom;
+  }
+
+  const strandVertexShader = `
+    attribute float alpha;
+    varying float vAlpha;
+    varying float vY;
+    uniform float uTime;
+    void main() {
+      vAlpha = alpha;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      vY = position.y;
+      gl_PointSize = max(2.0, 5.0 * (300.0 / -mvPosition.z));
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `;
+
+  const strandFragmentShader = `
+    uniform vec3 uColor;
+    uniform sampler2D uTexture;
+    uniform float uHelixHeight;
+    varying float vAlpha;
+    varying float vY;
+    void main() {
+      float edgeFade = 1.0 - smoothstep(uHelixHeight * 0.35, uHelixHeight * 0.5, abs(vY));
+      vec4 texColor = texture2D(uTexture, gl_PointCoord);
+      gl_FragColor = vec4(uColor, texColor.a * vAlpha * edgeFade * 0.9);
+    }
+  `;
+
+  // Gold strand
+  const goldGeom = createStrandGeometry(0);
+  const goldMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: GOLD },
+      uTexture: { value: particleTexture },
+      uTime: { value: 0 },
+      uHelixHeight: { value: HELIX_HEIGHT }
+    },
+    vertexShader: strandVertexShader,
+    fragmentShader: strandFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const goldStrand = new THREE.Points(goldGeom, goldMat);
+  helixGroup.add(goldStrand);
+
+  // Blue strand (phase offset = PI)
+  const blueGeom = createStrandGeometry(Math.PI);
+  const blueMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: BLUE },
+      uTexture: { value: particleTexture },
+      uTime: { value: 0 },
+      uHelixHeight: { value: HELIX_HEIGHT }
+    },
+    vertexShader: strandVertexShader,
+    fragmentShader: strandFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const blueStrand = new THREE.Points(blueGeom, blueMat);
+  helixGroup.add(blueStrand);
+
+  // --- CONNECTION LINES (between strands) ---
+  const linePositions = new Float32Array(RUNGS_COUNT * 2 * 3);
+  const lineColors = new Float32Array(RUNGS_COUNT * 2 * 3);
+  const lineAlphas = new Float32Array(RUNGS_COUNT * 2);
+
+  for (let i = 0; i < RUNGS_COUNT; i++) {
+    const t = i / RUNGS_COUNT;
+    const angle = t * Math.PI * 2 * HELIX_TURNS;
+    const y = (t - 0.5) * HELIX_HEIGHT;
+
+    // Gold side
+    linePositions[i * 6] = Math.cos(angle) * HELIX_RADIUS;
+    linePositions[i * 6 + 1] = y;
+    linePositions[i * 6 + 2] = Math.sin(angle) * HELIX_RADIUS;
+
+    // Blue side
+    linePositions[i * 6 + 3] = Math.cos(angle + Math.PI) * HELIX_RADIUS;
+    linePositions[i * 6 + 4] = y;
+    linePositions[i * 6 + 5] = Math.sin(angle + Math.PI) * HELIX_RADIUS;
+
+    // Colors: gold to blue gradient
+    lineColors[i * 6] = GOLD.r;
+    lineColors[i * 6 + 1] = GOLD.g;
+    lineColors[i * 6 + 2] = GOLD.b;
+    lineColors[i * 6 + 3] = BLUE.r;
+    lineColors[i * 6 + 4] = BLUE.g;
+    lineColors[i * 6 + 5] = BLUE.b;
+
+    lineAlphas[i * 2] = 1.0;
+    lineAlphas[i * 2 + 1] = 1.0;
+  }
+
+  const lineGeom = new THREE.BufferGeometry();
+  lineGeom.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+  lineGeom.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
+
+  const lineVertexShader = `
+    attribute vec3 color;
+    varying vec3 vColor;
+    varying float vY;
+    void main() {
+      vColor = color;
+      vY = position.y;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+
+  const lineFragmentShader = `
+    uniform float uHelixHeight;
+    varying vec3 vColor;
+    varying float vY;
+    void main() {
+      float edgeFade = 1.0 - smoothstep(uHelixHeight * 0.35, uHelixHeight * 0.5, abs(vY));
+      gl_FragColor = vec4(vColor, edgeFade * 0.2);
+    }
+  `;
+
+  const lineMat = new THREE.ShaderMaterial({
+    uniforms: { uHelixHeight: { value: HELIX_HEIGHT } },
+    vertexShader: lineVertexShader,
+    fragmentShader: lineFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  const lines = new THREE.LineSegments(lineGeom, lineMat);
+  helixGroup.add(lines);
+
+  // --- RUNG PARTICLES (tiny dots along each rung) ---
+  const rungParticleCount = RUNGS_COUNT * RUNG_PARTICLES;
+  const rungPositions = new Float32Array(rungParticleCount * 3);
+  const rungColorArr = new Float32Array(rungParticleCount * 3);
+  const rungAlphaArr = new Float32Array(rungParticleCount);
+
+  for (let i = 0; i < RUNGS_COUNT; i++) {
+    const t = i / RUNGS_COUNT;
+    const angle = t * Math.PI * 2 * HELIX_TURNS;
+    const y = (t - 0.5) * HELIX_HEIGHT;
+
+    const goldPos = new THREE.Vector3(
+      Math.cos(angle) * HELIX_RADIUS, y, Math.sin(angle) * HELIX_RADIUS
+    );
+    const bluePos = new THREE.Vector3(
+      Math.cos(angle + Math.PI) * HELIX_RADIUS, y, Math.sin(angle + Math.PI) * HELIX_RADIUS
+    );
+
+    for (let j = 0; j < RUNG_PARTICLES; j++) {
+      const idx = (i * RUNG_PARTICLES + j);
+      const lerp = j / (RUNG_PARTICLES - 1);
+
+      rungPositions[idx * 3] = goldPos.x + (bluePos.x - goldPos.x) * lerp;
+      rungPositions[idx * 3 + 1] = goldPos.y + (bluePos.y - goldPos.y) * lerp;
+      rungPositions[idx * 3 + 2] = goldPos.z + (bluePos.z - goldPos.z) * lerp;
+
+      const c = new THREE.Color().lerpColors(GOLD, BLUE, lerp);
+      rungColorArr[idx * 3] = c.r;
+      rungColorArr[idx * 3 + 1] = c.g;
+      rungColorArr[idx * 3 + 2] = c.b;
+
+      rungAlphaArr[idx] = 0.6 + Math.random() * 0.4;
+    }
+  }
+
+  const rungGeom = new THREE.BufferGeometry();
+  rungGeom.setAttribute('position', new THREE.BufferAttribute(rungPositions, 3));
+  rungGeom.setAttribute('color', new THREE.BufferAttribute(rungColorArr, 3));
+  rungGeom.setAttribute('alpha', new THREE.BufferAttribute(rungAlphaArr, 1));
+
+  const rungVertexShader = `
+    attribute vec3 color;
+    attribute float alpha;
+    varying vec3 vColor;
+    varying float vAlpha;
+    varying float vY;
+    void main() {
+      vColor = color;
+      vAlpha = alpha;
+      vY = position.y;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = max(1.5, 3.0 * (300.0 / -mvPosition.z));
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `;
+
+  const rungFragmentShader = `
+    uniform sampler2D uTexture;
+    uniform float uHelixHeight;
+    varying vec3 vColor;
+    varying float vAlpha;
+    varying float vY;
+    void main() {
+      float edgeFade = 1.0 - smoothstep(uHelixHeight * 0.35, uHelixHeight * 0.5, abs(vY));
+      vec4 texColor = texture2D(uTexture, gl_PointCoord);
+      gl_FragColor = vec4(vColor, texColor.a * vAlpha * edgeFade * 0.5);
+    }
+  `;
+
+  const rungMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTexture: { value: particleTexture },
+      uHelixHeight: { value: HELIX_HEIGHT }
+    },
+    vertexShader: rungVertexShader,
+    fragmentShader: rungFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  const rungPoints = new THREE.Points(rungGeom, rungMat);
+  helixGroup.add(rungPoints);
+
+  // --- VALUE TEXT SPRITES ---
+  const textSprites = [];
+
+  function createTextSprite(text, position, color) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 512;
+    canvas.height = 64;
+
+    ctx.font = '300 28px "Helvetica Neue", Arial, sans-serif';
+    ctx.letterSpacing = '8px';
+    ctx.fillStyle = 'transparent';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = `rgba(${Math.round(color.r*255)}, ${Math.round(color.g*255)}, ${Math.round(color.b*255)}, 0.7)`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+
+    const mat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0
+    });
+
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(position);
+    sprite.scale.set(4, 0.5, 1);
+    sprite.userData = {
+      basePosition: position.clone(),
+      targetOpacity: 0,
+      rungIndex: 0
+    };
+
+    helixGroup.add(sprite);
+    return sprite;
+  }
+
+  // Place text sprites at selected rungs
+  const textRungIndices = [];
+  const step = Math.floor(RUNGS_COUNT / VALUES.length);
+  for (let i = 0; i < VALUES.length; i++) {
+    const rungIdx = i * step + Math.floor(step / 2);
+    textRungIndices.push(rungIdx);
+
+    const t = rungIdx / RUNGS_COUNT;
+    const angle = t * Math.PI * 2 * HELIX_TURNS;
+    const y = (t - 0.5) * HELIX_HEIGHT;
+
+    // Position at center of rung
+    const midX = (Math.cos(angle) * HELIX_RADIUS + Math.cos(angle + Math.PI) * HELIX_RADIUS) / 2;
+    const midZ = (Math.sin(angle) * HELIX_RADIUS + Math.sin(angle + Math.PI) * HELIX_RADIUS) / 2;
+
+    const color = new THREE.Color().lerpColors(GOLD, BLUE, 0.5);
+    const sprite = createTextSprite(VALUES[i], new THREE.Vector3(midX, y, midZ), color);
+    sprite.userData.rungIndex = rungIdx;
+    textSprites.push(sprite);
+  }
+
+  // --- DRIFT PARTICLES ---
+  const driftData = [];
+  const driftPositions = new Float32Array(DRIFT_PARTICLES * 3);
+  const driftColors = new Float32Array(DRIFT_PARTICLES * 3);
+  const driftAlphas = new Float32Array(DRIFT_PARTICLES);
+
+  for (let i = 0; i < DRIFT_PARTICLES; i++) {
+    const isGold = Math.random() > 0.5;
+    const color = isGold ? GOLD : BLUE;
+    const rungIdx = Math.floor(Math.random() * RUNGS_COUNT);
+    const t = rungIdx / RUNGS_COUNT;
+    const angle = t * Math.PI * 2 * HELIX_TURNS + (isGold ? 0 : Math.PI);
+    const y = (t - 0.5) * HELIX_HEIGHT;
+
+    const origin = new THREE.Vector3(
+      Math.cos(angle) * HELIX_RADIUS,
+      y,
+      Math.sin(angle) * HELIX_RADIUS
+    );
+
+    driftData.push({
+      origin: origin.clone(),
+      current: origin.clone(),
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.02,
+        (Math.random() - 0.5) * 0.02,
+        (Math.random() - 0.5) * 0.02
+      ),
+      phase: Math.random() * Math.PI * 2,
+      driftRadius: 0.3 + Math.random() * 0.8,
+      speed: 0.3 + Math.random() * 0.7,
+      returnStrength: 0.005 + Math.random() * 0.01,
+      state: 'drifting', // drifting | returning
+      timer: Math.random() * 200
+    });
+
+    driftPositions[i * 3] = origin.x;
+    driftPositions[i * 3 + 1] = origin.y;
+    driftPositions[i * 3 + 2] = origin.z;
+
+    driftColors[i * 3] = color.r;
+    driftColors[i * 3 + 1] = color.g;
+    driftColors[i * 3 + 2] = color.b;
+
+    driftAlphas[i] = 0.6;
+  }
+
+  const driftGeom = new THREE.BufferGeometry();
+  driftGeom.setAttribute('position', new THREE.BufferAttribute(driftPositions, 3));
+  driftGeom.setAttribute('color', new THREE.BufferAttribute(driftColors, 3));
+  driftGeom.setAttribute('alpha', new THREE.BufferAttribute(driftAlphas, 1));
+
+  const driftMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTexture: { value: particleTexture },
+      uHelixHeight: { value: HELIX_HEIGHT }
+    },
+    vertexShader: rungVertexShader,
+    fragmentShader: rungFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  const driftPoints = new THREE.Points(driftGeom, driftMat);
+  helixGroup.add(driftPoints);
+
+  // --- AMBIENT DUST ---
+  const dustCount = 300;
+  const dustPositions = new Float32Array(dustCount * 3);
+  const dustAlphas = new Float32Array(dustCount);
+
+  for (let i = 0; i < dustCount; i++) {
+    dustPositions[i * 3] = (Math.random() - 0.5) * 30;
+    dustPositions[i * 3 + 1] = (Math.random() - 0.5) * 30;
+    dustPositions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+    dustAlphas[i] = Math.random() * 0.3;
+  }
+
+  const dustGeom = new THREE.BufferGeometry();
+  dustGeom.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+  dustGeom.setAttribute('alpha', new THREE.BufferAttribute(dustAlphas, 1));
+
+  const dustVertexShader = `
+    attribute float alpha;
+    varying float vAlpha;
+    void main() {
+      vAlpha = alpha;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = max(1.0, 2.0 * (300.0 / -mvPosition.z));
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `;
+
+  const dustFragmentShader = `
+    uniform sampler2D uTexture;
+    varying float vAlpha;
+    void main() {
+      vec4 texColor = texture2D(uTexture, gl_PointCoord);
+      gl_FragColor = vec4(1.0, 1.0, 1.0, texColor.a * vAlpha);
+    }
+  `;
+
+  const dustMat = new THREE.ShaderMaterial({
+    uniforms: { uTexture: { value: particleTexture } },
+    vertexShader: dustVertexShader,
+    fragmentShader: dustFragmentShader,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+
+  const dustParticles = new THREE.Points(dustGeom, dustMat);
+  scene.add(dustParticles);
+
+  // --- MOUSE INTERACTION ---
+  let mouseX = 0, mouseY = 0;
+  let targetRotY = 0, targetRotX = 0;
+  let isDragging = false;
+  let dragStartX = 0, dragStartY = 0;
+  let dragRotY = 0, dragRotX = 0;
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  let hoveredRung = -1;
+
+  document.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+  });
+
+  document.addEventListener('mouseup', () => { isDragging = false; });
+
+  document.addEventListener('mousemove', (e) => {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+    mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+
+    mouse.x = mouseX;
+    mouse.y = mouseY;
+
+    if (isDragging) {
+      const dx = e.clientX - dragStartX;
+      const dy = e.clientY - dragStartY;
+      dragRotY += dx * 0.005;
+      dragRotX += dy * 0.003;
+      dragRotX = Math.max(-0.5, Math.min(0.5, dragRotX));
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+    }
+  });
+
+  // Touch support
+  document.addEventListener('touchstart', (e) => {
+    isDragging = true;
+    dragStartX = e.touches[0].clientX;
+    dragStartY = e.touches[0].clientY;
+  });
+
+  document.addEventListener('touchend', () => { isDragging = false; });
+
+  document.addEventListener('touchmove', (e) => {
+    if (isDragging && e.touches.length === 1) {
+      const dx = e.touches[0].clientX - dragStartX;
+      const dy = e.touches[0].clientY - dragStartY;
+      dragRotY += dx * 0.005;
+      dragRotX += dy * 0.003;
+      dragRotX = Math.max(-0.5, Math.min(0.5, dragRotX));
+      dragStartX = e.touches[0].clientX;
+      dragStartY = e.touches[0].clientY;
+    }
+  });
+
+  // --- ASSEMBLY ANIMATION STATE ---
+  let assemblyOffset = 0;
+
+  // --- HOVER DETECTION ---
+  function findNearestRung() {
+    raycaster.setFromCamera(mouse, camera);
+    const ray = raycaster.ray;
+
+    let closestDist = Infinity;
+    let closestIdx = -1;
+
+    for (let i = 0; i < RUNGS_COUNT; i++) {
+      const t = i / RUNGS_COUNT;
+      const angle = t * Math.PI * 2 * HELIX_TURNS;
+      const y = (t - 0.5) * HELIX_HEIGHT;
+
+      const midX = (Math.cos(angle) * HELIX_RADIUS + Math.cos(angle + Math.PI) * HELIX_RADIUS) / 2;
+      const midZ = (Math.sin(angle) * HELIX_RADIUS + Math.sin(angle + Math.PI) * HELIX_RADIUS) / 2;
+
+      // Transform by helix group rotation
+      const point = new THREE.Vector3(midX, y, midZ);
+      point.applyMatrix4(helixGroup.matrixWorld);
+
+      const dist = ray.distanceToPoint(point);
+      if (dist < 1.5 && dist < closestDist) {
+        closestDist = dist;
+        closestIdx = i;
+      }
+    }
+
+    return closestIdx;
+  }
+
+  // --- UPDATE STRANDS (assembly animation) ---
+  function updateStrands(time) {
+    assemblyOffset = (time * ASSEMBLY_SPEED) % HELIX_HEIGHT;
+
+    const goldPos = goldGeom.attributes.position.array;
+    const bluePos = blueGeom.attributes.position.array;
+    const goldAlpha = goldGeom.attributes.alpha.array;
+    const blueAlpha = blueGeom.attributes.alpha.array;
+
+    for (let i = 0; i < POINTS_PER_STRAND; i++) {
+      const t = i / POINTS_PER_STRAND;
+      const baseY = (t - 0.5) * HELIX_HEIGHT;
+
+      // Shift Y for assembly effect
+      let y = baseY + assemblyOffset;
+      if (y > HELIX_HEIGHT * 0.5) y -= HELIX_HEIGHT;
+
+      const angle = ((y + HELIX_HEIGHT * 0.5) / HELIX_HEIGHT) * Math.PI * 2 * HELIX_TURNS;
+
+      // Gold strand
+      goldPos[i * 3] = Math.cos(angle) * HELIX_RADIUS;
+      goldPos[i * 3 + 1] = y;
+      goldPos[i * 3 + 2] = Math.sin(angle) * HELIX_RADIUS;
+
+      // Assembly fade at top
+      const topDist = (HELIX_HEIGHT * 0.5 - y) / (HELIX_HEIGHT * 0.15);
+      goldAlpha[i] = Math.min(1.0, topDist);
+
+      // Blue strand
+      bluePos[i * 3] = Math.cos(angle + Math.PI) * HELIX_RADIUS;
+      bluePos[i * 3 + 1] = y;
+      bluePos[i * 3 + 2] = Math.sin(angle + Math.PI) * HELIX_RADIUS;
+      blueAlpha[i] = Math.min(1.0, topDist);
+    }
+
+    goldGeom.attributes.position.needsUpdate = true;
+    goldGeom.attributes.alpha.needsUpdate = true;
+    blueGeom.attributes.position.needsUpdate = true;
+    blueGeom.attributes.alpha.needsUpdate = true;
+
+    // Update rungs
+    const lp = lineGeom.attributes.position.array;
+    const rp = rungGeom.attributes.position.array;
+
+    for (let i = 0; i < RUNGS_COUNT; i++) {
+      const t = i / RUNGS_COUNT;
+      let y = (t - 0.5) * HELIX_HEIGHT + assemblyOffset;
+      if (y > HELIX_HEIGHT * 0.5) y -= HELIX_HEIGHT;
+
+      const angle = ((y + HELIX_HEIGHT * 0.5) / HELIX_HEIGHT) * Math.PI * 2 * HELIX_TURNS;
+
+      const gx = Math.cos(angle) * HELIX_RADIUS;
+      const gz = Math.sin(angle) * HELIX_RADIUS;
+      const bx = Math.cos(angle + Math.PI) * HELIX_RADIUS;
+      const bz = Math.sin(angle + Math.PI) * HELIX_RADIUS;
+
+      lp[i * 6] = gx;
+      lp[i * 6 + 1] = y;
+      lp[i * 6 + 2] = gz;
+      lp[i * 6 + 3] = bx;
+      lp[i * 6 + 4] = y;
+      lp[i * 6 + 5] = bz;
+
+      // Rung particles
+      for (let j = 0; j < RUNG_PARTICLES; j++) {
+        const idx = i * RUNG_PARTICLES + j;
+        const lerp = j / (RUNG_PARTICLES - 1);
+        rp[idx * 3] = gx + (bx - gx) * lerp;
+        rp[idx * 3 + 1] = y;
+        rp[idx * 3 + 2] = gz + (bz - gz) * lerp;
+      }
+    }
+
+    lineGeom.attributes.position.needsUpdate = true;
+    rungGeom.attributes.position.needsUpdate = true;
+
+    // Update text sprite positions
+    for (let s = 0; s < textSprites.length; s++) {
+      const sprite = textSprites[s];
+      const rungIdx = sprite.userData.rungIndex;
+      const t = rungIdx / RUNGS_COUNT;
+      let y = (t - 0.5) * HELIX_HEIGHT + assemblyOffset;
+      if (y > HELIX_HEIGHT * 0.5) y -= HELIX_HEIGHT;
+
+      const angle = ((y + HELIX_HEIGHT * 0.5) / HELIX_HEIGHT) * Math.PI * 2 * HELIX_TURNS;
+      const midX = (Math.cos(angle) + Math.cos(angle + Math.PI)) * HELIX_RADIUS / 2;
+      const midZ = (Math.sin(angle) + Math.sin(angle + Math.PI)) * HELIX_RADIUS / 2;
+
+      sprite.position.set(midX, y, midZ);
+
+      // Compute facing: show text when rung faces camera
+      const worldPos = new THREE.Vector3();
+      sprite.getWorldPosition(worldPos);
+      const toCamera = new THREE.Vector3().subVectors(camera.position, worldPos).normalize();
+      const rungDir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).normalize();
+      // Transform rungDir by helix rotation
+      rungDir.applyQuaternion(helixGroup.quaternion);
+      const facing = Math.abs(toCamera.dot(rungDir));
+
+      // Hovering boost
+      const isHoveredRung = (hoveredRung >= 0 && Math.abs(rungIdx - hoveredRung) < 3);
+      const hoverBoost = isHoveredRung ? 0.6 : 0;
+
+      const edgeFade = 1.0 - Math.min(1, Math.max(0, (Math.abs(y) - HELIX_HEIGHT * 0.3) / (HELIX_HEIGHT * 0.15)));
+
+      sprite.userData.targetOpacity = Math.min(1, (facing * 0.6 + hoverBoost)) * edgeFade;
+      sprite.material.opacity += (sprite.userData.targetOpacity - sprite.material.opacity) * 0.08;
+
+      // Scale up when hovered
+      const targetScale = isHoveredRung ? 5 : 4;
+      sprite.scale.x += (targetScale - sprite.scale.x) * 0.1;
+    }
+  }
+
+  // --- UPDATE DRIFT PARTICLES ---
+  function updateDrift(time) {
+    const positions = driftGeom.attributes.position.array;
+    const alphas = driftGeom.attributes.alpha.array;
+
+    for (let i = 0; i < DRIFT_PARTICLES; i++) {
+      const d = driftData[i];
+      d.timer++;
+
+      if (d.state === 'drifting') {
+        // Organic drift motion
+        d.current.x += Math.sin(time * d.speed + d.phase) * 0.008 + d.velocity.x;
+        d.current.y += Math.cos(time * d.speed * 0.7 + d.phase) * 0.006 + d.velocity.y;
+        d.current.z += Math.sin(time * d.speed * 0.5 + d.phase + 1) * 0.008 + d.velocity.z;
+
+        const dist = d.current.distanceTo(d.origin);
+        if (dist > d.driftRadius || d.timer > 300 + Math.random() * 200) {
+          d.state = 'returning';
+          d.timer = 0;
+        }
+
+        alphas[i] = 0.4 + Math.sin(time * 2 + d.phase) * 0.2;
+      } else {
+        // Return to origin with spring
+        const pull = new THREE.Vector3().subVectors(d.origin, d.current).multiplyScalar(d.returnStrength * 3);
+        d.velocity.add(pull);
+        d.velocity.multiplyScalar(0.95);
+        d.current.add(d.velocity);
+
+        const dist = d.current.distanceTo(d.origin);
+        if (dist < 0.05) {
+          d.state = 'drifting';
+          d.timer = 0;
+          d.velocity.set(
+            (Math.random() - 0.5) * 0.02,
+            (Math.random() - 0.5) * 0.02,
+            (Math.random() - 0.5) * 0.02
+          );
+          d.phase = Math.random() * Math.PI * 2;
+        }
+
+        alphas[i] = 0.3 + dist * 0.3;
+      }
+
+      positions[i * 3] = d.current.x;
+      positions[i * 3 + 1] = d.current.y;
+      positions[i * 3 + 2] = d.current.z;
+    }
+
+    driftGeom.attributes.position.needsUpdate = true;
+    driftGeom.attributes.alpha.needsUpdate = true;
+  }
+
+  // --- UPDATE DUST ---
+  function updateDust(time) {
+    const positions = dustGeom.attributes.position.array;
+    const alphas = dustGeom.attributes.alpha.array;
+
+    for (let i = 0; i < dustCount; i++) {
+      positions[i * 3 + 1] += Math.sin(time * 0.3 + i * 0.1) * 0.003;
+      positions[i * 3] += Math.cos(time * 0.2 + i * 0.15) * 0.002;
+      alphas[i] = 0.1 + Math.sin(time * 0.5 + i) * 0.08;
+    }
+
+    dustGeom.attributes.position.needsUpdate = true;
+    dustGeom.attributes.alpha.needsUpdate = true;
+  }
+
+  // --- HIGHLIGHT HOVERED RUNGS ---
+  function updateRungHighlight() {
+    if (!isDragging) {
+      hoveredRung = findNearestRung();
+    } else {
+      hoveredRung = -1;
+    }
+
+    const colors = rungGeom.attributes.color.array;
+    const alphas = rungGeom.attributes.alpha.array;
+
+    for (let i = 0; i < RUNGS_COUNT; i++) {
+      const isNear = hoveredRung >= 0 && Math.abs(i - hoveredRung) <= 2;
+      const brightness = isNear ? 1.5 : 1.0;
+      const alphaBoost = isNear ? 1.0 : 0.6;
+
+      for (let j = 0; j < RUNG_PARTICLES; j++) {
+        const idx = i * RUNG_PARTICLES + j;
+        const lerp = j / (RUNG_PARTICLES - 1);
+        const c = new THREE.Color().lerpColors(GOLD, BLUE, lerp);
+
+        colors[idx * 3] = Math.min(1, c.r * brightness);
+        colors[idx * 3 + 1] = Math.min(1, c.g * brightness);
+        colors[idx * 3 + 2] = Math.min(1, c.b * brightness);
+
+        alphas[idx] = alphaBoost * (0.6 + Math.random() * 0.2);
+      }
+    }
+
+    rungGeom.attributes.color.needsUpdate = true;
+    rungGeom.attributes.alpha.needsUpdate = true;
+  }
+
+  // --- RESIZE ---
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // --- ANIMATION LOOP ---
+  const clock = new THREE.Clock();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const time = clock.getElapsedTime();
+
+    // Smooth rotation
+    targetRotY = time * ROTATION_SPEED + dragRotY;
+    targetRotX = mouseY * 0.15 + dragRotX;
+
+    helixGroup.rotation.y += (targetRotY - helixGroup.rotation.y) * 0.03;
+    helixGroup.rotation.x += (targetRotX - helixGroup.rotation.x) * 0.03;
+
+    // Subtle camera sway
+    camera.position.x = Math.sin(time * 0.1) * 0.3;
+    camera.position.y = Math.cos(time * 0.08) * 0.2;
+    camera.lookAt(0, 0, 0);
+
+    updateStrands(time);
+    updateDrift(time);
+    updateDust(time);
+    updateRungHighlight();
+
+    goldMat.uniforms.uTime.value = time;
+    blueMat.uniforms.uTime.value = time;
+
+    renderer.render(scene, camera);
+  }
+
+  animate();
+})();
+</script>
+</body>
+</html>
