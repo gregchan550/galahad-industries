@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries</title>
+<meta name="description" content="Galahad Industries — Enterprise AI software. Systems initializing.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;600;700&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --amber: #c9a84c;
+    --amber-glow: rgba(201, 168, 76, 0.4);
+    --blue: #4a9eff;
+    --blue-glow: rgba(74, 158, 255, 0.3);
+    --bg: #0a0a0c;
+    --text-dim: rgba(255, 255, 255, 0.4);
+    --text-mid: rgba(255, 255, 255, 0.6);
+    --text-bright: rgba(255, 255, 255, 0.9);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* === BOOT SEQUENCE === */
+  #boot-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 40px;
+    overflow: hidden;
+  }
+
+  .boot-line {
+    font-size: clamp(11px, 1.4vw, 14px);
+    line-height: 1.7;
+    color: var(--blue);
+    opacity: 0;
+    transform: translateY(2px);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .boot-line.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .boot-line .prefix {
+    color: rgba(74, 158, 255, 0.5);
+  }
+
+  .boot-line .highlight {
+    color: var(--amber);
+  }
+
+  .boot-line .success {
+    color: #4ade80;
+  }
+
+  .boot-line .warn {
+    color: var(--amber);
+  }
+
+  #cursor-init {
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background: var(--blue);
+    animation: blink 0.6s step-end infinite;
+    margin-top: 40vh;
+    margin-left: 2px;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  .init-text {
+    font-size: clamp(13px, 1.6vw, 16px);
+    color: var(--blue);
+    display: inline;
+    letter-spacing: 2px;
+  }
+
+  #init-line {
+    margin-top: 40vh;
+    transition: margin-top 0.5s ease;
+  }
+
+  #init-line.shifted {
+    margin-top: 20px;
+  }
+
+  /* === WHITE FLASH === */
+  #flash-overlay {
+    position: fixed; inset: 0;
+    background: white;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* === 3D WORLD === */
+  #world-canvas {
+    position: fixed; inset: 0;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  #world-canvas.visible {
+    opacity: 1;
+  }
+
+  /* === FLOATING TEXT OVERLAY === */
+  #title-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 2s ease;
+  }
+
+  #title-overlay.visible {
+    opacity: 1;
+  }
+
+  .company-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(28px, 5vw, 64px);
+    letter-spacing: clamp(10px, 2vw, 28px);
+    color: var(--text-bright);
+    text-transform: uppercase;
+    text-shadow: 0 0 60px rgba(255, 255, 255, 0.15), 0 0 120px rgba(201, 168, 76, 0.1);
+    opacity: 0;
+    animation: title-reveal 2.5s ease 0.5s forwards;
+  }
+
+  @keyframes title-reveal {
+    0% { opacity: 0; letter-spacing: clamp(18px, 3.5vw, 40px); filter: blur(8px); transform: translateY(20px); }
+    60% { filter: blur(0); }
+    100% { opacity: 1; letter-spacing: clamp(10px, 2vw, 28px); filter: blur(0); transform: translateY(0); }
+  }
+
+  .divider {
+    width: clamp(50px, 10vw, 100px);
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--amber), transparent);
+    margin: 28px auto;
+    opacity: 0;
+    animation: fade-up 1s ease 1.8s forwards;
+  }
+
+  .tagline {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(12px, 1.4vw, 16px);
+    color: var(--amber);
+    letter-spacing: 4px;
+    opacity: 0;
+    animation: fade-up 1.5s ease 2.2s forwards;
+  }
+
+  @keyframes fade-up {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 0.85; transform: translateY(0); }
+  }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    pointer-events: none;
+    opacity: 0;
+    animation: fade-up 1s ease 3s forwards;
+  }
+
+  .bottom-bar span {
+    font-size: clamp(9px, 1vw, 11px);
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    margin-right: 8px;
+    animation: pulse-dot 2s ease-in-out infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.5; box-shadow: 0 0 4px var(--blue-glow); }
+    50% { opacity: 1; box-shadow: 0 0 12px var(--blue-glow); }
+  }
+
+  /* Scanline overlay */
+  .scanlines {
+    position: fixed; inset: 0;
+    z-index: 90;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.02) 2px,
+      rgba(0,0,0,0.02) 4px
+    );
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+
+  .scanlines.visible { opacity: 1; }
+
+  /* Vignette */
+  .vignette {
+    position: fixed; inset: 0;
+    z-index: 80;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%);
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+
+  .vignette.visible { opacity: 1; }
+
+  @media (max-width: 600px) {
+    #boot-screen { padding: 20px; }
+    .bottom-bar { padding: 15px 20px; flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Boot sequence -->
+<div id="boot-screen">
+  <div id="init-line">
+    <span class="init-text" id="init-text"></span><span id="cursor-init"></span>
+  </div>
+  <div id="boot-log" style="margin-top: 16px;"></div>
+</div>
+
+<!-- White flash -->
+<div id="flash-overlay"></div>
+
+<!-- 3D World -->
+<canvas id="world-canvas"></canvas>
+
+<!-- Title overlay -->
+<div id="title-overlay">
+  <div class="company-name">Galahad Industries</div>
+  <div class="divider"></div>
+  <div class="tagline">The seat is taken.</div>
+</div>
+
+<div class="bottom-bar">
+  <span><span class="status-dot"></span>All systems nominal</span>
+  <span>Est. 2026 &mdash; Brisbane, AU</span>
+</div>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+(function() {
+  // ==================== BOOT SEQUENCE (identical to v3) ====================
+  const bootScreen = document.getElementById('boot-screen');
+  const initText = document.getElementById('init-text');
+  const initLine = document.getElementById('init-line');
+  const cursorInit = document.getElementById('cursor-init');
+  const bootLog = document.getElementById('boot-log');
+  const flashOverlay = document.getElementById('flash-overlay');
+  const worldCanvas = document.getElementById('world-canvas');
+  const titleOverlay = document.getElementById('title-overlay');
+
+  const bootMessages = [
+    { text: '[CORE]  Loading neural cores...', delay: 60 },
+    { text: '[CORE]  4 inference engines allocated', delay: 40, cls: 'success' },
+    { text: '[MEM]   Initializing knowledge graph...', delay: 55 },
+    { text: '[MEM]   Vector store mounted — 2.4M embeddings', delay: 45, cls: 'success' },
+    { text: '[NET]   Connecting secure mesh network...', delay: 50 },
+    { text: '[NET]   Encrypted channels established', delay: 40, cls: 'success' },
+    { text: '[SYS]   Calibrating inference engine...', delay: 55 },
+    { text: '[SYS]   Model weights verified — integrity OK', delay: 40, cls: 'success' },
+    { text: '[AUTH]  Loading quest parameters...', delay: 60 },
+    { text: '[AUTH]  Directive: Undercut legacy enterprise by 3-5x', delay: 45, cls: 'warn' },
+    { text: '[PLAN]  Target sectors: ERP, CRM, Supply Chain', delay: 50 },
+    { text: '[PLAN]  Competitive analysis loaded', delay: 40, cls: 'success' },
+    { text: '[AGI]   Reasoning modules online', delay: 55 },
+    { text: '[AGI]   Agentic workflows initialized', delay: 45, cls: 'success' },
+    { text: '[BOOT]  All subsystems nominal', delay: 50, cls: 'success' },
+    { text: '[BOOT]  Galahad Industries — READY', delay: 0, cls: 'warn' },
+  ];
+
+  function typeText(element, text, baseSpeed, callback) {
+    let i = 0;
+    function type() {
+      if (i < text.length) {
+        element.textContent += text[i];
+        i++;
+        let speed = baseSpeed + Math.random() * 40;
+        if (text[i-1] === '.') speed += 80;
+        setTimeout(type, speed);
+      } else if (callback) {
+        callback();
+      }
+    }
+    type();
+  }
+
+  function addBootLine(msg, callback) {
+    const line = document.createElement('div');
+    line.className = 'boot-line';
+
+    const match = msg.text.match(/^(\[[A-Z]+\]\s*)(.*)/);
+    if (match) {
+      const prefix = document.createElement('span');
+      prefix.className = 'prefix';
+      prefix.textContent = match[1];
+      line.appendChild(prefix);
+
+      const content = document.createElement('span');
+      if (msg.cls) content.className = msg.cls;
+      content.textContent = match[2];
+      line.appendChild(content);
+    } else {
+      line.textContent = msg.text;
+    }
+
+    bootLog.appendChild(line);
+
+    requestAnimationFrame(() => {
+      line.classList.add('visible');
+    });
+
+    setTimeout(() => {
+      if (callback) callback();
+    }, msg.delay + 60 + Math.random() * 80);
+  }
+
+  function runBootSequence(messages, index, callback) {
+    if (index >= messages.length) {
+      if (callback) setTimeout(callback, 600);
+      return;
+    }
+    addBootLine(messages[index], () => {
+      runBootSequence(messages, index + 1, callback);
+    });
+  }
+
+  // Phase 1: Blinking cursor for 1.2s
+  setTimeout(() => {
+    // Phase 2: Type "INITIALIZING..."
+    typeText(initText, 'INITIALIZING...', 70, () => {
+      // Phase 3: Pause, then shift up and show boot log
+      setTimeout(() => {
+        initLine.classList.add('shifted');
+        cursorInit.style.display = 'none';
+
+        setTimeout(() => {
+          // Phase 4: Boot messages
+          runBootSequence(bootMessages, 0, () => {
+            // Phase 5: THE TRANSITION
+            triggerTransition();
+          });
+        }, 400);
+      }, 500);
+    });
+  }, 1200);
+
+  // ==================== TRANSITION ====================
+  function triggerTransition() {
+    // Pre-init the 3D world (hidden)
+    initWorld();
+
+    setTimeout(() => {
+      // White flash
+      flashOverlay.style.transition = 'opacity 0.12s ease-in';
+      flashOverlay.style.opacity = '0.85';
+
+      setTimeout(() => {
+        // Rapidly fade flash and boot screen simultaneously
+        flashOverlay.style.transition = 'opacity 0.6s ease-out';
+        flashOverlay.style.opacity = '0';
+
+        // Boot screen dissolves
+        bootScreen.style.transition = 'opacity 0.4s ease-out';
+        bootScreen.style.opacity = '0';
+
+        // Reveal 3D world
+        worldCanvas.classList.add('visible');
+
+        // Start the camera pull-back animation
+        startCameraReveal();
+
+        setTimeout(() => {
+          bootScreen.style.display = 'none';
+
+          // Show title overlay with delay
+          setTimeout(() => {
+            titleOverlay.classList.add('visible');
+            document.querySelector('.scanlines').classList.add('visible');
+            document.querySelector('.vignette').classList.add('visible');
+          }, 800);
+        }, 500);
+      }, 150);
+    }, 400);
+  }
+
+  // ==================== 3D WORLD ====================
+  let scene, camera, renderer, clock;
+  let mouseX = 0, mouseY = 0;
+  let targetMouseX = 0, targetMouseY = 0;
+  let gridMesh, gridMeshSolid;
+  let particles;
+  let dataStreams = [];
+  let auroraPlanes = [];
+  let worldInitialized = false;
+  let cameraRevealing = false;
+  let cameraRevealStart = 0;
+  const CAMERA_REVEAL_DURATION = 3.5; // seconds
+
+  // Camera targets
+  const CAM_START = { x: 0, y: 12, z: 5, lookY: 10, lookZ: -2 };
+  const CAM_END = { x: 0, y: 85, z: 200, lookY: 10, lookZ: -50 };
+
+  function initWorld() {
+    if (worldInitialized) return;
+    worldInitialized = true;
+
+    clock = new THREE.Clock();
+
+    // Scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a1a);
+    scene.fog = new THREE.FogExp2(0x0a0a1a, 0.0015);
+
+    // Camera — starts close (as if viewing terminal), pulls back to reveal
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(CAM_START.x, CAM_START.y, CAM_START.z);
+    camera.lookAt(0, CAM_START.lookY, CAM_START.lookZ);
+
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ canvas: worldCanvas, antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.85;
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0x1a1a3a, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0x4a9eff, 0.4);
+    dirLight.position.set(50, 120, 50);
+    scene.add(dirLight);
+
+    const pointLight1 = new THREE.PointLight(0x4a9eff, 2.0, 500);
+    pointLight1.position.set(-80, 50, 30);
+    scene.add(pointLight1);
+
+    const pointLight2 = new THREE.PointLight(0xc9a84c, 1.2, 400);
+    pointLight2.position.set(80, 60, -40);
+    scene.add(pointLight2);
+
+    const pointLight3 = new THREE.PointLight(0x4a9eff, 0.8, 300);
+    pointLight3.position.set(0, 30, -100);
+    scene.add(pointLight3);
+
+    createGridTerrain();
+    createStructures();
+    createDataStreams();
+    createParticles();
+    createAurora();
+    createHorizonGlow();
+
+    // Mouse interaction
+    document.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('resize', onResize);
+
+    animate();
+  }
+
+  function startCameraReveal() {
+    cameraRevealing = true;
+    cameraRevealStart = clock.getElapsedTime();
+  }
+
+  // Smooth easing
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function easeInOutQuart(t) {
+    return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+  }
+
+  // === GRID TERRAIN ===
+  function createGridTerrain() {
+    const gridSize = 1000;
+    const divisions = 100;
+    const step = gridSize / divisions;
+
+    // Custom grid with vertex displacement
+    const geometry = new THREE.PlaneGeometry(gridSize, gridSize, divisions, divisions);
+    geometry.rotateX(-Math.PI / 2);
+
+    const positions = geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i);
+      const z = positions.getZ(i);
+      const dist = Math.sqrt(x * x + z * z);
+      // Gentle terrain — peaks and valleys
+      const height = Math.sin(x * 0.007) * Math.cos(z * 0.005) * 10
+                    + Math.sin(x * 0.018 + z * 0.012) * 4
+                    + Math.cos(x * 0.003 - z * 0.004) * 6
+                    - dist * 0.008;
+      positions.setY(i, height);
+    }
+    geometry.computeVertexNormals();
+
+    // Wireframe grid material — electric blue
+    const wireMaterial = new THREE.MeshBasicMaterial({
+      color: 0x4a9eff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.1,
+    });
+
+    gridMesh = new THREE.Mesh(geometry, wireMaterial);
+    gridMesh.userData.basePositions = positions.array.slice();
+    scene.add(gridMesh);
+
+    // Solid dark surface beneath wireframe
+    const solidGeo = geometry.clone();
+    const solidMat = new THREE.MeshBasicMaterial({
+      color: 0x050510,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+    });
+    gridMeshSolid = new THREE.Mesh(solidGeo, solidMat);
+    gridMeshSolid.position.y = -0.3;
+    scene.add(gridMeshSolid);
+
+    // Bright grid lines at major intervals
+    const brightLineMat = new THREE.LineBasicMaterial({
+      color: 0x4a9eff,
+      transparent: true,
+      opacity: 0.18,
+    });
+
+    const halfSize = gridSize / 2;
+    for (let i = -halfSize; i <= halfSize; i += step * 5) {
+      const pts1 = [new THREE.Vector3(-halfSize, 0.3, i), new THREE.Vector3(halfSize, 0.3, i)];
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts1), brightLineMat));
+      const pts2 = [new THREE.Vector3(i, 0.3, -halfSize), new THREE.Vector3(i, 0.3, halfSize)];
+      scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts2), brightLineMat));
+    }
+  }
+
+  // === STRUCTURES (instanced towers/columns) ===
+  function createStructures() {
+    const count = 180;
+    const spread = 400;
+
+    const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+    // Blue towers
+    const blueMat = new THREE.MeshPhongMaterial({
+      color: 0x4a9eff,
+      emissive: 0x0a1a3a,
+      emissiveIntensity: 0.5,
+      transparent: true,
+      opacity: 0.55,
+      shininess: 100,
+    });
+
+    // Gold towers
+    const goldMat = new THREE.MeshPhongMaterial({
+      color: 0xc9a84c,
+      emissive: 0x2a1a00,
+      emissiveIntensity: 0.4,
+      transparent: true,
+      opacity: 0.45,
+      shininess: 120,
+    });
+
+    const blueCount = Math.floor(count * 0.65);
+    const goldCount = count - blueCount;
+
+    const blueInstanced = new THREE.InstancedMesh(boxGeo, blueMat, blueCount);
+    const goldInstanced = new THREE.InstancedMesh(boxGeo, goldMat, goldCount);
+
+    const dummy = new THREE.Object3D();
+    let bi = 0, gi = 0;
+    const structureData = [];
+
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 15 + Math.random() * spread;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius - 60;
+
+      // Taller near center, shorter at edges
+      const distFromCenter = Math.sqrt(x * x + (z + 60) * (z + 60));
+      const maxH = Math.max(4, 100 - distFromCenter * 0.18);
+      const height = 2 + Math.random() * maxH;
+      const width = 1 + Math.random() * 5;
+      const depth = 1 + Math.random() * 5;
+
+      dummy.position.set(x, height / 2, z);
+      dummy.scale.set(width, height, depth);
+      dummy.updateMatrix();
+
+      const isGold = Math.random() > 0.65;
+      if (isGold && gi < goldCount) {
+        goldInstanced.setMatrixAt(gi, dummy.matrix);
+        gi++;
+      } else if (bi < blueCount) {
+        blueInstanced.setMatrixAt(bi, dummy.matrix);
+        bi++;
+      }
+
+      structureData.push({
+        x, z, height,
+        baseHeight: height,
+        width, depth,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.2 + Math.random() * 0.6,
+        isGold,
+      });
+    }
+
+    blueInstanced.count = bi;
+    goldInstanced.count = gi;
+    blueInstanced.instanceMatrix.needsUpdate = true;
+    goldInstanced.instanceMatrix.needsUpdate = true;
+
+    scene.add(blueInstanced);
+    scene.add(goldInstanced);
+
+    // Store for animation
+    structureData.blueInstanced = blueInstanced;
+    structureData.goldInstanced = goldInstanced;
+    structureData.dummy = dummy;
+    window._structureData = structureData;
+
+    // Edge glow lines on some structures
+    for (let i = 0; i < 30; i++) {
+      const s = structureData[Math.floor(Math.random() * structureData.length)];
+      const glowMat = new THREE.LineBasicMaterial({
+        color: s.isGold ? 0xc9a84c : 0x4a9eff,
+        transparent: true,
+        opacity: 0.3,
+      });
+      const h = s.height;
+      const edgePoints = [
+        new THREE.Vector3(s.x, 0, s.z),
+        new THREE.Vector3(s.x, h, s.z),
+      ];
+      const edgeLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(edgePoints),
+        glowMat
+      );
+      scene.add(edgeLine);
+    }
+  }
+
+  // === DATA STREAMS (vertical geysers of light) ===
+  function createDataStreams() {
+    const streamCount = 20;
+
+    for (let i = 0; i < streamCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 15 + Math.random() * 250;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius - 60;
+      const height = 50 + Math.random() * 150;
+
+      const particleCount = 40;
+      const positions = new Float32Array(particleCount * 3);
+
+      for (let j = 0; j < particleCount; j++) {
+        positions[j * 3] = x + (Math.random() - 0.5) * 2;
+        positions[j * 3 + 1] = Math.random() * height;
+        positions[j * 3 + 2] = z + (Math.random() - 0.5) * 2;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      const isGold = i % 4 === 0;
+      const mat = new THREE.PointsMaterial({
+        color: isGold ? 0xc9a84c : 0x4a9eff,
+        size: 1.2 + Math.random() * 2,
+        transparent: true,
+        opacity: 0.5,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+
+      const points = new THREE.Points(geo, mat);
+      scene.add(points);
+
+      dataStreams.push({
+        points,
+        baseX: x,
+        baseZ: z,
+        height,
+        speed: 12 + Math.random() * 30,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  // === FLOATING PARTICLES (data packets) ===
+  function createParticles() {
+    const count = 3000;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const velocities = [];
+
+    const white = new THREE.Color(0xffffff);
+    const gold = new THREE.Color(0xc9a84c);
+    const blue = new THREE.Color(0x4a9eff);
+
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 900;
+      positions[i * 3 + 1] = 3 + Math.random() * 180;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 900 - 60;
+
+      const r = Math.random();
+      const col = r < 0.45 ? white : r < 0.75 ? gold : blue;
+      colors[i * 3] = col.r;
+      colors[i * 3 + 1] = col.g;
+      colors[i * 3 + 2] = col.b;
+
+      velocities.push({
+        x: (Math.random() - 0.5) * 0.4,
+        y: (Math.random() - 0.5) * 0.08 + 0.02,
+        z: (Math.random() - 0.5) * 0.4,
+      });
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const mat = new THREE.PointsMaterial({
+      size: 1.2,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+
+    particles = new THREE.Points(geo, mat);
+    particles.userData.velocities = velocities;
+    scene.add(particles);
+  }
+
+  // === AURORA / NEBULA SKY ===
+  function createAurora() {
+    const count = 7;
+
+    for (let i = 0; i < count; i++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      // Layered gradients for depth
+      const cx = 256 + (Math.random() - 0.5) * 300;
+      const cy = 128 + (Math.random() - 0.5) * 120;
+      const gradient = ctx.createRadialGradient(cx, cy, 10, 256, 128, 280);
+
+      const type = Math.random();
+      if (type < 0.35) {
+        // Deep purple
+        gradient.addColorStop(0, 'rgba(80, 40, 120, 0.14)');
+        gradient.addColorStop(0.5, 'rgba(40, 20, 80, 0.06)');
+        gradient.addColorStop(1, 'rgba(10, 10, 26, 0)');
+      } else if (type < 0.65) {
+        // Gold accent
+        gradient.addColorStop(0, 'rgba(201, 168, 76, 0.1)');
+        gradient.addColorStop(0.4, 'rgba(150, 120, 50, 0.04)');
+        gradient.addColorStop(1, 'rgba(10, 10, 26, 0)');
+      } else {
+        // Blue nebula
+        gradient.addColorStop(0, 'rgba(40, 80, 160, 0.12)');
+        gradient.addColorStop(0.5, 'rgba(20, 40, 100, 0.05)');
+        gradient.addColorStop(1, 'rgba(10, 10, 26, 0)');
+      }
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 512, 256);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      const geo = new THREE.PlaneGeometry(500 + Math.random() * 500, 200 + Math.random() * 250);
+      const mat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.35 + Math.random() * 0.3,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+
+      const plane = new THREE.Mesh(geo, mat);
+      plane.position.set(
+        (Math.random() - 0.5) * 500,
+        200 + Math.random() * 150,
+        -150 - Math.random() * 400
+      );
+      plane.rotation.x = -0.15 + Math.random() * 0.3;
+      plane.rotation.z = (Math.random() - 0.5) * 0.4;
+
+      scene.add(plane);
+      auroraPlanes.push({
+        mesh: plane,
+        baseY: plane.position.y,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.08 + Math.random() * 0.15,
+        rotSpeed: (Math.random() - 0.5) * 0.01,
+      });
+    }
+  }
+
+  // === HORIZON GLOW ===
+  function createHorizonGlow() {
+    // A subtle glow at the horizon line
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    const gradient = ctx.createLinearGradient(0, 256, 0, 0);
+    gradient.addColorStop(0, 'rgba(74, 158, 255, 0.15)');
+    gradient.addColorStop(0.3, 'rgba(74, 158, 255, 0.05)');
+    gradient.addColorStop(0.6, 'rgba(201, 168, 76, 0.03)');
+    gradient.addColorStop(1, 'rgba(10, 10, 26, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 1024, 256);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const geo = new THREE.PlaneGeometry(1200, 200);
+    const mat = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    const plane = new THREE.Mesh(geo, mat);
+    plane.position.set(0, 50, -400);
+    scene.add(plane);
+  }
+
+  // === MOUSE ===
+  function onMouseMove(e) {
+    targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+    targetMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+  }
+
+  // === RESIZE ===
+  function onResize() {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  // === ANIMATION LOOP ===
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const elapsed = clock.getElapsedTime();
+
+    // Smooth mouse follow
+    mouseX += (targetMouseX - mouseX) * 0.03;
+    mouseY += (targetMouseY - mouseY) * 0.03;
+
+    // Camera reveal animation (zoom out from terminal to world)
+    if (cameraRevealing) {
+      const t = Math.min(1, (elapsed - cameraRevealStart) / CAMERA_REVEAL_DURATION);
+      const ease = easeInOutQuart(t);
+
+      const cx = CAM_START.x + (CAM_END.x - CAM_START.x) * ease;
+      const cy = CAM_START.y + (CAM_END.y - CAM_START.y) * ease;
+      const cz = CAM_START.z + (CAM_END.z - CAM_START.z) * ease;
+      const ly = CAM_START.lookY + (CAM_END.lookY - CAM_START.lookY) * ease;
+      const lz = CAM_START.lookZ + (CAM_END.lookZ - CAM_START.lookZ) * ease;
+
+      camera.position.set(cx + mouseX * 20 * ease, cy - mouseY * 8 * ease, cz);
+      camera.lookAt(mouseX * 6 * ease, ly, lz);
+
+      if (t >= 1) {
+        cameraRevealing = false;
+      }
+    } else {
+      // Idle camera — subtle parallax from mouse
+      camera.position.x = CAM_END.x + mouseX * 25;
+      camera.position.y = CAM_END.y - mouseY * 10;
+      camera.position.z = CAM_END.z;
+      camera.lookAt(mouseX * 8, CAM_END.lookY, CAM_END.lookZ);
+    }
+
+    // Animate grid terrain (breathing undulation)
+    if (gridMesh) {
+      const positions = gridMesh.geometry.attributes.position;
+      const basePositions = gridMesh.userData.basePositions;
+      for (let i = 0; i < positions.count; i++) {
+        const bx = basePositions[i * 3];
+        const bz = basePositions[i * 3 + 2];
+        const by = basePositions[i * 3 + 1];
+        const wave = Math.sin(bx * 0.008 + elapsed * 0.4) * Math.cos(bz * 0.008 + elapsed * 0.25) * 2.5;
+        positions.setY(i, by + wave);
+      }
+      positions.needsUpdate = true;
+    }
+
+    // Animate data streams (particles rising like geysers)
+    for (const stream of dataStreams) {
+      const pos = stream.points.geometry.attributes.position;
+      for (let j = 0; j < pos.count; j++) {
+        let y = pos.getY(j);
+        y += stream.speed * 0.016;
+        if (y > stream.height) {
+          y = 0;
+          pos.setX(j, stream.baseX + (Math.random() - 0.5) * 3);
+          pos.setZ(j, stream.baseZ + (Math.random() - 0.5) * 3);
+        }
+        pos.setY(j, y);
+      }
+      pos.needsUpdate = true;
+
+      // Pulse opacity
+      stream.points.material.opacity = 0.35 + Math.sin(elapsed * stream.speed * 0.05 + stream.phase) * 0.2;
+    }
+
+    // Animate floating particles
+    if (particles) {
+      const pos = particles.geometry.attributes.position;
+      const vels = particles.userData.velocities;
+      for (let i = 0; i < pos.count; i++) {
+        let x = pos.getX(i) + vels[i].x;
+        let y = pos.getY(i) + vels[i].y;
+        let z = pos.getZ(i) + vels[i].z;
+
+        // Wrap around
+        if (x > 450) x = -450;
+        if (x < -450) x = 450;
+        if (z > 390) z = -510;
+        if (z < -510) z = 390;
+        if (y > 185) { y = 3; x = (Math.random() - 0.5) * 900; z = (Math.random() - 0.5) * 900 - 60; }
+        if (y < 3) y = 185;
+
+        pos.setX(i, x);
+        pos.setY(i, y);
+        pos.setZ(i, z);
+      }
+      pos.needsUpdate = true;
+    }
+
+    // Animate aurora planes (drift and pulse)
+    for (const a of auroraPlanes) {
+      a.mesh.position.y = a.baseY + Math.sin(elapsed * a.speed + a.phase) * 8;
+      a.mesh.rotation.z += a.rotSpeed * 0.016;
+      a.mesh.material.opacity = 0.25 + Math.sin(elapsed * a.speed * 0.4 + a.phase) * 0.15;
+    }
+
+    renderer.render(scene, camera);
+  }
+})();
+</script>
+</body>
+</html>
