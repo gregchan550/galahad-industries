@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries — Forging the Future</title>
+<meta name="description" content="Galahad Industries. Enterprise AI software forged for purpose.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@300;400;500;600;700&family=Inter:wght@300;400&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #050505;
+    color: #e8e0d4;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    cursor: none;
+  }
+
+  canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  .screen-shake {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-weight: 400;
+    font-size: clamp(2.5rem, 7vw, 6.5rem);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 0 1rem;
+    opacity: 0;
+    visibility: hidden;
+    /* Metallic forged gradient */
+    background: linear-gradient(
+      180deg,
+      #f5f0e8 0%,
+      #d4c4a0 15%,
+      #a89060 30%,
+      #c9a84c 50%,
+      #ff9944 70%,
+      #ff6b1a 85%,
+      #cc4400 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 30px rgba(255, 107, 26, 0.4))
+            drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+    text-shadow: none;
+  }
+
+  .title.forged {
+    visibility: visible;
+    opacity: 1;
+  }
+
+  .subtitle {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 300;
+    font-size: clamp(0.9rem, 2vw, 1.4rem);
+    letter-spacing: 0.6em;
+    text-transform: uppercase;
+    margin-top: 1.2rem;
+    opacity: 0;
+    transition: opacity 2.5s ease;
+    color: #7a6f5e;
+  }
+
+  .subtitle.visible { opacity: 1; }
+
+  .email-cta {
+    margin-top: 3.5rem;
+    opacity: 0;
+    transition: opacity 1.5s ease 0.8s;
+    pointer-events: auto;
+    text-align: center;
+  }
+
+  .email-cta.visible { opacity: 1; }
+
+  .email-cta a {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(0.6rem, 1vw, 0.8rem);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #5a5044;
+    text-decoration: none;
+    border: 1px solid rgba(90, 80, 68, 0.25);
+    padding: 0.85rem 2.8rem;
+    transition: all 0.5s ease;
+    display: inline-block;
+  }
+
+  .email-cta a:hover {
+    color: #c9a84c;
+    border-color: rgba(201, 168, 76, 0.4);
+    box-shadow: 0 0 40px rgba(255, 107, 26, 0.08), inset 0 0 20px rgba(255, 107, 26, 0.03);
+  }
+
+  .cursor-glow {
+    position: fixed;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10;
+    background: radial-gradient(circle, rgba(255, 150, 60, 0.9) 0%, rgba(255, 107, 26, 0.4) 30%, transparent 70%);
+    transform: translate(-50%, -50%);
+    mix-blend-mode: screen;
+    transition: opacity 0.3s;
+  }
+
+  .vignette {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 3;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(5, 5, 5, 0.8) 100%);
+  }
+
+  /* Impact flash overlay */
+  .flash-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 4;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 200, 100, 0.8) 0%, rgba(255, 100, 20, 0.3) 30%, transparent 70%);
+    opacity: 0;
+    transition: none;
+  }
+
+  @media (max-width: 600px) {
+    .title { letter-spacing: 0.12em; }
+    .subtitle { letter-spacing: 0.3em; }
+    body { cursor: auto; }
+    .cursor-glow { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="forge"></canvas>
+<div class="overlay" id="shaker">
+  <h1 class="title" id="title">Galahad Industries</h1>
+  <p class="subtitle" id="subtitle">Forging the future.</p>
+  <div class="email-cta" id="cta">
+    <a href="mailto:hello@galahad.industries">Get in touch</a>
+  </div>
+</div>
+<div class="vignette"></div>
+<div class="flash-overlay" id="flash"></div>
+<div class="cursor-glow" id="cursor"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  const canvas = document.getElementById('forge');
+  const ctx = canvas.getContext('2d');
+  const cursorEl = document.getElementById('cursor');
+  const titleEl = document.getElementById('title');
+  const subtitleEl = document.getElementById('subtitle');
+  const ctaEl = document.getElementById('cta');
+  const flashEl = document.getElementById('flash');
+  const shakerEl = document.getElementById('shaker');
+
+  let W, H, dpr;
+  let mouse = { x: -9999, y: -9999, active: false };
+  let time = 0;
+
+  // --- PHASES ---
+  // 0: embers only (warmup)
+  // 1: particles coalesce into sword
+  // 2: sword holds, glowing
+  // 3: sword launches upward
+  // 4: sword slams down — IMPACT
+  // 5: letters forge from impact
+  // 6: ongoing (embers, sparks, sword pulses)
+  let phase = 0;
+  let phaseTime = 0;
+  let swordBuilt = false;
+  let impactTriggered = false;
+  let textForging = false;
+  let textForged = false;
+  let shakeIntensity = 0;
+  let flashIntensity = 0;
+
+  // Sword position (for launch/slam)
+  let swordOffsetY = 0;
+  let swordTargetY = 0;
+
+  const TIMINGS = {
+    warmup: 60,
+    form: 200,
+    hold: 90,
+    launch: 30,
+    slam: 18,
+    forgeLetters: 120,
+    subtitleDelay: 80
+  };
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (swordBuilt) rebuildSword();
+    if (textForging || textForged) rebuildLetterTargets();
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  // --- EMBER COLOR ---
+  function emberRGB(heat) {
+    let r, g, b;
+    if (heat > 0.85) {
+      r = 255; g = 255; b = 200 + (1 - heat) * 55;
+    } else if (heat > 0.7) {
+      const t = (heat - 0.7) / 0.15;
+      r = 255; g = 60 + t * 195; b = 5 + t * 195;
+    } else if (heat > 0.4) {
+      const t = (heat - 0.4) / 0.3;
+      r = 255; g = 110 + (1 - t) * 80; b = 20 + (1 - t) * 30;
+    } else if (heat > 0.15) {
+      const t = (heat - 0.15) / 0.25;
+      r = 220 + t * 35; g = 190 + (1 - t) * 10; b = 80 + (1 - t) * 80;
+    } else {
+      const t = heat / 0.15;
+      r = 200 + t * 20; g = 200 - t * 10; b = 200 - t * 120;
+    }
+    return { r: Math.round(r), g: Math.round(g), b: Math.round(b) };
+  }
+
+  // --- EMBERS ---
+  const EMBER_COUNT = 650;
+  const embers = [];
+
+  class Ember {
+    constructor() { this.init(true); }
+
+    init(scatter) {
+      this.x = Math.random() * W;
+      this.y = scatter ? Math.random() * H : H + 10 + Math.random() * 40;
+      this.vx = (Math.random() - 0.5) * 0.6;
+      this.vy = -(0.6 + Math.random() * 2.4);
+      this.size = 0.6 + Math.random() * 2.2;
+      this.heat = 0.6 + Math.random() * 0.4;
+      this.life = scatter ? Math.random() : 1;
+      this.decay = 0.001 + Math.random() * 0.003;
+      this.wobble = Math.random() * Math.PI * 2;
+      this.wobbleSpeed = 0.02 + Math.random() * 0.04;
+      this.wobbleAmp = 0.2 + Math.random() * 0.5;
+    }
+
+    update() {
+      this.wobble += this.wobbleSpeed;
+      this.vx += Math.sin(this.wobble) * this.wobbleAmp * 0.02;
+      this.vx *= 0.995;
+      this.vy *= 0.999;
+
+      if (mouse.active) {
+        const dx = mouse.x - this.x;
+        const dy = mouse.y - this.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < 22000) {
+          const force = (22000 - d2) / 22000 * 0.012;
+          this.vx += dx * force;
+          this.vy += dy * force;
+          this.heat = Math.min(1, this.heat + 0.03);
+        }
+      }
+
+      this.x += this.vx;
+      this.y += this.vy;
+      this.heat = Math.max(0, this.heat - 0.001);
+      this.life -= this.decay;
+
+      if (this.life <= 0 || this.y < -30 || this.x < -60 || this.x > W + 60) {
+        this.init(false);
+      }
+    }
+
+    draw() {
+      const a = this.life * (0.5 + 0.3 * Math.sin(this.wobble * 3));
+      if (a < 0.01) return;
+      const { r, g, b } = emberRGB(this.heat);
+      const s = this.size * (0.6 + this.heat * 0.4);
+
+      const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, s * 5);
+      grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.6) + ')');
+      grad.addColorStop(0.3, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.15) + ')');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(this.x - s * 5, this.y - s * 5, s * 10, s * 10);
+
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, s * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + Math.min(255, r + 30) + ',' + Math.min(255, g + 30) + ',' + Math.min(255, b + 30) + ',' + (a * 0.9) + ')';
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < EMBER_COUNT; i++) embers.push(new Ember());
+
+  // --- SWORD PARTICLES ---
+  const swordParts = [];
+  const MAX_SWORD = 500;
+
+  function generateSwordPoints() {
+    const cx = W / 2, cy = H / 2 - H * 0.04;
+    const sc = Math.min(W, H) / 850;
+    const pts = [];
+    const d = 2;
+
+    // Blade
+    const bladeH = 230 * sc, tipW = 3 * sc, baseW = 15 * sc;
+    for (let row = 0; row < bladeH; row += d) {
+      const t = row / bladeH;
+      const w = tipW + t * (baseW - tipW);
+      for (let col = -w; col <= w; col += d) {
+        pts.push({ x: cx + col + (Math.random() - 0.5) * d * 0.4, y: cy - bladeH + row + (Math.random() - 0.5) * d * 0.4 });
+      }
+    }
+    // Guard
+    const gW = 50 * sc, gH = 7 * sc;
+    for (let row = -gH; row <= gH; row += d) {
+      for (let col = -gW; col <= gW; col += d) {
+        pts.push({ x: cx + col + (Math.random() - 0.5), y: cy + row + (Math.random() - 0.5) });
+      }
+    }
+    // Grip
+    const grH = 52 * sc, grW = 6 * sc;
+    for (let row = 0; row < grH; row += d) {
+      for (let col = -grW; col <= grW; col += d) {
+        pts.push({ x: cx + col + (Math.random() - 0.5), y: cy + gH + row + (Math.random() - 0.5) });
+      }
+    }
+    // Pommel
+    const pomR = 11 * sc, pomCy = cy + gH + grH + pomR;
+    for (let a = 0; a < Math.PI * 2; a += 0.12) {
+      for (let r = 0; r < pomR; r += d) {
+        pts.push({ x: cx + Math.cos(a) * r + (Math.random() - 0.5), y: pomCy + Math.sin(a) * r + (Math.random() - 0.5) });
+      }
+    }
+    return pts;
+  }
+
+  function rebuildSword() {
+    const pts = generateSwordPoints();
+    const step = Math.max(1, Math.floor(pts.length / MAX_SWORD));
+    swordParts.length = 0;
+    for (let i = 0; i < pts.length; i += step) {
+      swordParts.push(new SwordMote(pts[i].x, pts[i].y));
+    }
+  }
+
+  function buildSword() {
+    if (swordBuilt) return;
+    swordBuilt = true;
+    rebuildSword();
+  }
+
+  class SwordMote {
+    constructor(tx, ty) {
+      this.tx = tx; this.ty = ty;
+      this.x = W / 2 + (Math.random() - 0.5) * W * 0.6;
+      this.y = H * 0.7 + Math.random() * H * 0.35;
+      this.vx = 0; this.vy = 0;
+      this.arrived = false;
+      this.heat = 1;
+      this.size = 0.8 + Math.random() * 1.2;
+      this.flicker = Math.random() * Math.PI * 2;
+      this.alpha = 1;
+    }
+
+    update(formProg) {
+      this.flicker += 0.07 + Math.random() * 0.03;
+
+      if (!this.arrived) {
+        const dx = this.tx - this.x;
+        const dy = this.ty - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const ease = Math.min(1, formProg * 1.8);
+        const pull = 0.015 + ease * 0.07;
+        this.vx += dx * pull;
+        this.vy += dy * pull;
+        this.vx *= 0.88;
+        this.vy *= 0.88;
+        this.x += this.vx;
+        this.y += this.vy;
+        if (dist < 2.5) {
+          this.arrived = true;
+          this.x = this.tx;
+          this.y = this.ty;
+        }
+      } else {
+        this.x = this.tx + Math.sin(this.flicker) * 0.4;
+        this.y = this.ty + Math.cos(this.flicker * 1.3) * 0.25;
+        this.heat = Math.max(0.45, this.heat - 0.001);
+      }
+    }
+
+    draw(offsetY) {
+      if (this.alpha < 0.01) return;
+      const drawX = this.x;
+      const drawY = this.y + (offsetY || 0);
+      const { r, g, b } = emberRGB(this.heat);
+      const a = this.alpha * (0.65 + Math.sin(this.flicker) * 0.15);
+      const s = this.size;
+
+      const grad = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, s * 4);
+      grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.7) + ')');
+      grad.addColorStop(0.4, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.2) + ')');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(drawX - s * 4, drawY - s * 4, s * 8, s * 8);
+
+      ctx.beginPath();
+      ctx.arc(drawX, drawY, s * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,' + Math.min(255, g + 60) + ',' + Math.min(255, b + 80) + ',' + (a * 0.85) + ')';
+      ctx.fill();
+    }
+  }
+
+  // --- IMPACT SPARKS ---
+  const impactSparks = [];
+
+  class ImpactSpark {
+    constructor(x, y, isHeavy) {
+      this.x = x; this.y = y;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = isHeavy
+        ? 3 + Math.random() * 12
+        : 1 + Math.random() * 6;
+      this.vx = Math.cos(angle) * speed;
+      this.vy = Math.sin(angle) * speed - (isHeavy ? 2 : 0.5);
+      this.gravity = 0.08 + Math.random() * 0.06;
+      this.size = isHeavy ? 1.5 + Math.random() * 3 : 0.5 + Math.random() * 1.5;
+      this.heat = 0.8 + Math.random() * 0.2;
+      this.life = 1;
+      this.decay = isHeavy ? 0.008 + Math.random() * 0.01 : 0.012 + Math.random() * 0.02;
+      this.trail = [];
+    }
+
+    update() {
+      this.trail.push({ x: this.x, y: this.y });
+      if (this.trail.length > 6) this.trail.shift();
+
+      this.vy += this.gravity;
+      this.vx *= 0.995;
+      this.x += this.vx;
+      this.y += this.vy;
+      this.life -= this.decay;
+      this.heat = Math.max(0.2, this.heat - 0.003);
+    }
+
+    draw() {
+      if (this.life <= 0) return;
+      const { r, g, b } = emberRGB(this.heat);
+      const a = this.life;
+
+      // Trail
+      for (let i = 0; i < this.trail.length; i++) {
+        const ta = a * (i / this.trail.length) * 0.4;
+        const ts = this.size * 0.5 * (i / this.trail.length);
+        ctx.beginPath();
+        ctx.arc(this.trail[i].x, this.trail[i].y, ts, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + ta + ')';
+        ctx.fill();
+      }
+
+      // Core
+      const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.size * 3);
+      grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.8) + ')');
+      grad.addColorStop(0.5, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.2) + ')');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(this.x - this.size * 3, this.y - this.size * 3, this.size * 6, this.size * 6);
+
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,220,' + (a * 0.9) + ')';
+      ctx.fill();
+    }
+  }
+
+  // --- LETTER PARTICLES (forged text) ---
+  const letterParticles = [];
+  let letterTargets = [];
+
+  function getTextPixels(text, fontSize, yOffset) {
+    const offCanvas = document.createElement('canvas');
+    const offCtx = offCanvas.getContext('2d');
+    offCanvas.width = W * dpr;
+    offCanvas.height = H * dpr;
+    offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    offCtx.font = fontSize + 'px "Bebas Neue", sans-serif';
+    offCtx.textAlign = 'center';
+    offCtx.textBaseline = 'middle';
+    offCtx.fillStyle = '#fff';
+    offCtx.fillText(text, W / 2, H / 2 + yOffset);
+
+    const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+    const pixels = imageData.data;
+    const points = [];
+    const step = Math.max(2, Math.round(3 / dpr));
+
+    for (let y = 0; y < offCanvas.height; y += step) {
+      for (let x = 0; x < offCanvas.width; x += step) {
+        const idx = (y * offCanvas.width + x) * 4;
+        if (pixels[idx + 3] > 128) {
+          points.push({ x: x / dpr, y: y / dpr });
+        }
+      }
+    }
+    return points;
+  }
+
+  function rebuildLetterTargets() {
+    const fontSize = Math.min(W * 0.08, 90);
+    letterTargets = getTextPixels('GALAHAD INDUSTRIES', fontSize, 0);
+
+    // Cap particle count
+    const maxParticles = 1200;
+    if (letterTargets.length > maxParticles) {
+      const step = Math.ceil(letterTargets.length / maxParticles);
+      const filtered = [];
+      for (let i = 0; i < letterTargets.length; i += step) {
+        filtered.push(letterTargets[i]);
+      }
+      letterTargets = filtered;
+    }
+  }
+
+  function spawnLetterParticles() {
+    rebuildLetterTargets();
+    const cx = W / 2, cy = H / 2;
+
+    for (let i = 0; i < letterTargets.length; i++) {
+      const t = letterTargets[i];
+      // Spawn from impact point, spray outward
+      const angle = Math.atan2(t.y - cy, t.x - cx);
+      const dist = Math.sqrt((t.x - cx) ** 2 + (t.y - cy) ** 2);
+      const overshoot = 1.3 + Math.random() * 0.5;
+
+      letterParticles.push({
+        x: cx,
+        y: cy,
+        tx: t.x,
+        ty: t.y,
+        // Launch outward past target, then settle
+        vx: Math.cos(angle) * dist * 0.08 * overshoot + (Math.random() - 0.5) * 4,
+        vy: Math.sin(angle) * dist * 0.08 * overshoot + (Math.random() - 0.5) * 4 - 2,
+        heat: 0.9 + Math.random() * 0.1,
+        size: 1 + Math.random() * 1.5,
+        arrived: false,
+        arriveTime: 0,
+        flicker: Math.random() * Math.PI * 2,
+        delay: dist * 0.003 + Math.random() * 5 // staggered by distance
+      });
+    }
+  }
+
+  // --- ONGOING LETTER SPARKS ---
+  const letterSparks = [];
+
+  function spawnLetterSpark() {
+    if (letterParticles.length === 0) return;
+    const p = letterParticles[Math.floor(Math.random() * letterParticles.length)];
+    if (!p.arrived) return;
+    letterSparks.push({
+      x: p.tx,
+      y: p.ty,
+      vx: (Math.random() - 0.5) * 3,
+      vy: -(1 + Math.random() * 3),
+      life: 1,
+      decay: 0.02 + Math.random() * 0.03,
+      size: 0.4 + Math.random() * 1,
+      heat: 0.7 + Math.random() * 0.3
+    });
+  }
+
+  // --- FIRE TRAIL PARTICLES (during sword launch/slam) ---
+  const fireTrail = [];
+
+  function spawnFireTrail(x, y, count) {
+    for (let i = 0; i < count; i++) {
+      fireTrail.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y + Math.random() * 10,
+        vx: (Math.random() - 0.5) * 2,
+        vy: 1 + Math.random() * 3,
+        life: 1,
+        decay: 0.015 + Math.random() * 0.02,
+        size: 1 + Math.random() * 2.5,
+        heat: 0.8 + Math.random() * 0.2
+      });
+    }
+  }
+
+  // --- FORGE GLOW ---
+  function drawForgeGlow() {
+    const g1 = ctx.createRadialGradient(W / 2, H + 50, 0, W / 2, H + 50, H * 0.7);
+    g1.addColorStop(0, 'rgba(255, 60, 5, 0.07)');
+    g1.addColorStop(0.3, 'rgba(200, 40, 0, 0.035)');
+    g1.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g1;
+    ctx.fillRect(0, 0, W, H);
+
+    const pulse = 0.5 + 0.5 * Math.sin(time * 0.008);
+    const g2 = ctx.createRadialGradient(W / 2, H, 0, W / 2, H, H * 0.5);
+    g2.addColorStop(0, 'rgba(255, 80, 15, ' + (0.035 * pulse) + ')');
+    g2.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawHeatDistortion() {
+    ctx.save();
+    ctx.globalAlpha = 0.012;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 4; i++) {
+      const x = W * 0.3 + Math.sin(time * 0.002 + i * 1.7) * W * 0.25;
+      const w = 50 + Math.sin(time * 0.004 + i * 2.3) * 20;
+      const grad = ctx.createLinearGradient(x - w, 0, x + w, 0);
+      grad.addColorStop(0, 'rgba(255,90,20,0)');
+      grad.addColorStop(0.5, 'rgba(255,90,20,1)');
+      grad.addColorStop(1, 'rgba(255,90,20,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - w, H * 0.55 + Math.sin(time * 0.006 + i) * 25, w * 2, H * 0.45);
+    }
+    ctx.restore();
+  }
+
+  function drawSwordAura(intensity, offsetY) {
+    if (intensity <= 0.01) return;
+    const cx = W / 2, cy = H / 2 - H * 0.04 + (offsetY || 0);
+    const sc = Math.min(W, H) / 850;
+    const bladeH = 230 * sc;
+
+    const grad = ctx.createRadialGradient(cx, cy - bladeH * 0.3, 0, cx, cy - bladeH * 0.3, bladeH);
+    grad.addColorStop(0, 'rgba(255, 130, 40, ' + (0.06 * intensity) + ')');
+    grad.addColorStop(0.4, 'rgba(255, 80, 15, ' + (0.03 * intensity) + ')');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawMouseBloom() {
+    if (!mouse.active) return;
+    const grad = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 140);
+    grad.addColorStop(0, 'rgba(255, 130, 40, 0.04)');
+    grad.addColorStop(0.4, 'rgba(255, 80, 15, 0.015)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(mouse.x - 140, mouse.y - 140, 280, 280);
+  }
+
+  // --- SCREEN SHAKE ---
+  function applyScreenShake() {
+    if (shakeIntensity > 0.1) {
+      const sx = (Math.random() - 0.5) * shakeIntensity;
+      const sy = (Math.random() - 0.5) * shakeIntensity;
+      shakerEl.style.transform = 'translate(' + sx + 'px, ' + sy + 'px)';
+      canvas.style.transform = 'translate(' + sx + 'px, ' + sy + 'px)';
+      shakeIntensity *= 0.92;
+    } else {
+      shakerEl.style.transform = '';
+      canvas.style.transform = '';
+      shakeIntensity = 0;
+    }
+  }
+
+  // --- IMPACT FLASH ---
+  function updateFlash() {
+    if (flashIntensity > 0.01) {
+      flashEl.style.opacity = flashIntensity;
+      flashIntensity *= 0.88;
+    } else {
+      flashEl.style.opacity = 0;
+      flashIntensity = 0;
+    }
+  }
+
+  // --- MAIN ANIMATION LOOP ---
+  function frame() {
+    time++;
+    applyScreenShake();
+    updateFlash();
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(0, 0, W, H);
+
+    drawForgeGlow();
+    drawHeatDistortion();
+
+    // --- PHASE MANAGEMENT ---
+    if (phase === 0 && time > TIMINGS.warmup) {
+      phase = 1; phaseTime = 0;
+      buildSword();
+    }
+
+    if (phase === 1) {
+      phaseTime++;
+      if (phaseTime > TIMINGS.form) { phase = 2; phaseTime = 0; }
+    }
+
+    if (phase === 2) {
+      phaseTime++;
+      if (phaseTime > TIMINGS.hold) {
+        phase = 3; phaseTime = 0;
+        // Launch sword upward off screen
+        swordOffsetY = 0;
+        swordTargetY = -(H + 200);
+      }
+    }
+
+    if (phase === 3) {
+      phaseTime++;
+      // Sword flies up
+      const prog = Math.min(1, phaseTime / TIMINGS.launch);
+      const eased = prog * prog; // accelerate
+      swordOffsetY = swordTargetY * eased;
+      // Fire trail
+      if (phaseTime % 2 === 0) {
+        spawnFireTrail(W / 2, H / 2 + swordOffsetY + 100, 3);
+      }
+      if (phaseTime >= TIMINGS.launch) {
+        phase = 4; phaseTime = 0;
+        // Sword now above screen, starts slamming down
+        swordOffsetY = -(H + 200);
+        swordTargetY = 0;
+      }
+    }
+
+    if (phase === 4) {
+      phaseTime++;
+      // Sword SLAMS down — ease-in (cubic) for heavy impact feel
+      const prog = Math.min(1, phaseTime / TIMINGS.slam);
+      const eased = prog * prog * prog;
+      swordOffsetY = -(H + 200) * (1 - eased);
+      // Fire trail during slam
+      if (phaseTime % 1 === 0) {
+        spawnFireTrail(W / 2, H / 2 + swordOffsetY - 80, 5);
+      }
+
+      if (prog >= 1 && !impactTriggered) {
+        impactTriggered = true;
+        swordOffsetY = 0;
+
+        // IMPACT!
+        shakeIntensity = 30;
+        flashIntensity = 1;
+
+        // Spawn impact sparks
+        for (let i = 0; i < 200; i++) {
+          impactSparks.push(new ImpactSpark(W / 2, H / 2, i < 60));
+        }
+
+        // Forge letters
+        textForging = true;
+        spawnLetterParticles();
+
+        phase = 5; phaseTime = 0;
+      }
+    }
+
+    if (phase === 5) {
+      phaseTime++;
+      if (phaseTime > TIMINGS.forgeLetters && !textForged) {
+        textForged = true;
+        // Show DOM text (with forged class for opacity)
+        titleEl.classList.add('forged');
+        // Subtitle fades in after delay
+        setTimeout(function() {
+          subtitleEl.classList.add('visible');
+          ctaEl.classList.add('visible');
+        }, TIMINGS.subtitleDelay * 16);
+        phase = 6; phaseTime = 0;
+      }
+    }
+
+    // --- DRAW EMBERS ---
+    for (let i = 0; i < embers.length; i++) {
+      embers[i].update();
+      embers[i].draw();
+    }
+
+    // --- DRAW SWORD (phases 1-6, with offset) ---
+    if (phase >= 1) {
+      const fp = phase === 1 ? phaseTime / TIMINGS.form : 1;
+      const auraIntensity = phase <= 2 ? (phase === 1 ? fp : 1)
+        : phase >= 6 ? 0.3 + 0.2 * Math.sin(time * 0.015) : 0.6;
+
+      drawSwordAura(auraIntensity, swordOffsetY);
+
+      for (let i = 0; i < swordParts.length; i++) {
+        if (phase <= 2) swordParts[i].update(fp);
+        else if (phase >= 6) {
+          // Sword stays, pulsing
+          swordParts[i].heat = 0.35 + 0.15 * Math.sin(time * 0.01 + i * 0.1);
+          swordParts[i].flicker += 0.05;
+          swordParts[i].x = swordParts[i].tx + Math.sin(swordParts[i].flicker) * 0.3;
+          swordParts[i].y = swordParts[i].ty + Math.cos(swordParts[i].flicker * 1.3) * 0.2;
+        }
+        swordParts[i].draw(swordOffsetY);
+      }
+    }
+
+    // --- DRAW FIRE TRAIL ---
+    for (let i = fireTrail.length - 1; i >= 0; i--) {
+      const p = fireTrail[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx += (Math.random() - 0.5) * 0.3;
+      p.life -= p.decay;
+
+      if (p.life <= 0) { fireTrail.splice(i, 1); continue; }
+
+      const { r, g, b } = emberRGB(p.heat);
+      const a = p.life;
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 4);
+      grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.7) + ')');
+      grad.addColorStop(0.5, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.2) + ')');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(p.x - p.size * 4, p.y - p.size * 4, p.size * 8, p.size * 8);
+    }
+
+    // --- DRAW IMPACT SPARKS ---
+    for (let i = impactSparks.length - 1; i >= 0; i--) {
+      impactSparks[i].update();
+      impactSparks[i].draw();
+      if (impactSparks[i].life <= 0) impactSparks.splice(i, 1);
+    }
+
+    // --- DRAW LETTER PARTICLES ---
+    const cx = W / 2, cy = H / 2;
+    for (let i = 0; i < letterParticles.length; i++) {
+      const p = letterParticles[i];
+      p.flicker += 0.06;
+
+      if (p.delay > 0) {
+        p.delay--;
+        // Still at impact point, draw faintly
+        const { r, g, b } = emberRGB(p.heat);
+        ctx.beginPath();
+        ctx.arc(cx, cy, p.size * 0.3, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',0.3)';
+        ctx.fill();
+        continue;
+      }
+
+      if (!p.arrived) {
+        // Move toward target with deceleration
+        const dx = p.tx - p.x;
+        const dy = p.ty - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Spring toward target
+        p.vx += dx * 0.04;
+        p.vy += dy * 0.04;
+        p.vx *= 0.85;
+        p.vy *= 0.85;
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.heat = Math.max(0.4, p.heat - 0.003);
+
+        if (dist < 2) {
+          p.arrived = true;
+          p.arriveTime = time;
+          p.x = p.tx;
+          p.y = p.ty;
+        }
+      } else {
+        // Settled, slight vibration cooling
+        const cooling = Math.min(1, (time - p.arriveTime) / 200);
+        p.heat = 0.6 - cooling * 0.3 + Math.sin(p.flicker * 2) * 0.05;
+        p.x = p.tx + Math.sin(p.flicker) * (0.3 * (1 - cooling));
+        p.y = p.ty + Math.cos(p.flicker * 1.3) * (0.2 * (1 - cooling));
+
+        // Fade out as DOM text takes over
+        if (textForged) {
+          p.heat = Math.max(0.1, p.heat - 0.005);
+        }
+      }
+
+      const { r, g, b } = emberRGB(p.heat);
+      const a = textForged ? Math.max(0, 1 - (time - (p.arriveTime || time)) * 0.004) : 1;
+      if (a < 0.01) continue;
+
+      const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 3);
+      grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.8) + ')');
+      grad.addColorStop(0.5, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.2) + ')');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(p.x - p.size * 3, p.y - p.size * 3, p.size * 6, p.size * 6);
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,' + Math.min(255, g + 60) + ',' + Math.min(255, b + 60) + ',' + (a * 0.9) + ')';
+      ctx.fill();
+    }
+
+    // --- ONGOING LETTER SPARKS (phase 6) ---
+    if (phase === 6 && Math.random() < 0.15) {
+      spawnLetterSpark();
+    }
+
+    for (let i = letterSparks.length - 1; i >= 0; i--) {
+      const s = letterSparks[i];
+      s.x += s.vx;
+      s.y += s.vy;
+      s.vy += 0.04;
+      s.vx += (Math.random() - 0.5) * 0.2;
+      s.life -= s.decay;
+
+      if (s.life <= 0) { letterSparks.splice(i, 1); continue; }
+
+      const { r, g, b } = emberRGB(s.heat);
+      const a = s.life;
+
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.9) + ')';
+      ctx.fill();
+
+      // Glow
+      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.size * 4);
+      grad.addColorStop(0, 'rgba(' + r + ',' + g + ',' + b + ',' + (a * 0.3) + ')');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(s.x - s.size * 4, s.y - s.size * 4, s.size * 8, s.size * 8);
+    }
+
+    drawMouseBloom();
+    requestAnimationFrame(frame);
+  }
+
+  // --- INPUT ---
+  document.addEventListener('mousemove', function(e) {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+    cursorEl.style.left = e.clientX + 'px';
+    cursorEl.style.top = e.clientY + 'px';
+    cursorEl.style.opacity = '1';
+  });
+  document.addEventListener('mouseleave', function() { mouse.active = false; cursorEl.style.opacity = '0'; });
+  document.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.active = true;
+  }, { passive: false });
+  document.addEventListener('touchend', function() { mouse.active = false; });
+
+  if ('ontouchstart' in window) {
+    document.body.style.cursor = 'auto';
+    cursorEl.style.display = 'none';
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
