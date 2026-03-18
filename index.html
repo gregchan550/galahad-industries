@@ -3,615 +3,469 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Galahad Industries</title>
-<meta name="description" content="Galahad Industries — Enterprise AI software. Systems initializing.">
+<title>Galahad Industries — Where Legacy Meets Intelligence</title>
+<meta name="description" content="Galahad Industries — Enterprise AI software that replaces legacy systems at a fraction of the cost.">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@200;300;400&display=swap');
 
   *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-  :root {
-    --amber: #c9a84c;
-    --amber-glow: rgba(201, 168, 76, 0.4);
-    --blue: #4a9eff;
-    --blue-glow: rgba(74, 158, 255, 0.3);
-    --bg: #0a0a0c;
-    --text-dim: rgba(255, 255, 255, 0.4);
-    --text-mid: rgba(255, 255, 255, 0.6);
-    --text-bright: rgba(255, 255, 255, 0.9);
+  body {
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    cursor: crosshair;
   }
 
-  html, body {
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
     width: 100%; height: 100%;
-    overflow: hidden;
-    background: var(--bg);
-    font-family: 'JetBrains Mono', monospace;
+    z-index: 0;
   }
 
-  /* === BOOT SEQUENCE === */
-  #boot-screen {
-    position: fixed; inset: 0;
-    background: var(--bg);
-    z-index: 100;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    padding: 40px;
-    overflow: hidden;
-    transition: opacity 0.8s ease;
-  }
-
-  #boot-screen.fade-out {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .boot-line {
-    font-size: clamp(11px, 1.4vw, 14px);
-    line-height: 1.7;
-    color: var(--blue);
-    opacity: 0;
-    transform: translateY(2px);
-    white-space: nowrap;
-    overflow: hidden;
-  }
-
-  .boot-line.visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  .boot-line .prefix {
-    color: rgba(74, 158, 255, 0.5);
-  }
-
-  .boot-line .highlight {
-    color: var(--amber);
-  }
-
-  .boot-line .success {
-    color: #4ade80;
-  }
-
-  .boot-line .warn {
-    color: var(--amber);
-  }
-
-  #cursor-init {
-    display: inline-block;
-    width: 8px;
-    height: 16px;
-    background: var(--blue);
-    animation: blink 0.6s step-end infinite;
-    margin-top: 40vh;
-    margin-left: 2px;
-  }
-
-  @keyframes blink {
-    50% { opacity: 0; }
-  }
-
-  .init-text {
-    font-size: clamp(13px, 1.6vw, 16px);
-    color: var(--blue);
-    display: inline;
-    letter-spacing: 2px;
-  }
-
-  #init-line {
-    margin-top: 40vh;
-    transition: margin-top 0.5s ease;
-  }
-
-  #init-line.shifted {
-    margin-top: 20px;
-  }
-
-  /* === MAIN SCENE === */
-  #main-scene {
-    position: fixed; inset: 0;
+  .overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    opacity: 0;
-    transition: opacity 1.5s ease;
-    z-index: 50;
-  }
-
-  #main-scene.visible {
-    opacity: 1;
-  }
-
-  /* Grid background */
-  #grid-canvas {
-    position: fixed; inset: 0;
-    z-index: 1;
-  }
-
-  /* Crest container */
-  .crest-container {
-    position: relative;
-    z-index: 10;
-    width: clamp(140px, 22vw, 220px);
-    height: clamp(160px, 25vw, 260px);
-    margin-bottom: 40px;
-  }
-
-  .crest-svg {
-    width: 100%;
-    height: 100%;
-    filter: drop-shadow(0 0 30px var(--amber-glow));
-    animation: crest-breathe 4s ease-in-out infinite;
-  }
-
-  @keyframes crest-breathe {
-    0%, 100% { filter: drop-shadow(0 0 20px var(--amber-glow)); }
-    50% { filter: drop-shadow(0 0 40px var(--amber-glow)) drop-shadow(0 0 60px rgba(201, 168, 76, 0.15)); }
-  }
-
-  .crest-svg .crest-line {
-    fill: none;
-    stroke: var(--amber);
-    stroke-width: 1.5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-dasharray: 1000;
-    stroke-dashoffset: 1000;
-    animation: draw-crest 2.5s ease forwards;
-  }
-
-  .crest-svg .crest-fill {
-    fill: var(--amber);
-    opacity: 0;
-    animation: fade-in-crest 1s ease 2s forwards;
-  }
-
-  .crest-svg .inner-glow {
-    fill: none;
-    stroke: var(--amber);
-    stroke-width: 0.5;
-    opacity: 0;
-    animation: fade-in-crest 1.5s ease 2.2s forwards;
-  }
-
-  @keyframes draw-crest {
-    to { stroke-dashoffset: 0; }
-  }
-
-  @keyframes fade-in-crest {
-    to { opacity: 0.6; }
-  }
-
-  /* Title */
-  .title-container {
-    position: relative;
-    z-index: 10;
+    pointer-events: none;
     text-align: center;
   }
 
-  .company-name {
-    font-family: 'Inter', sans-serif;
-    font-weight: 300;
-    font-size: clamp(24px, 4.5vw, 52px);
-    letter-spacing: clamp(8px, 1.5vw, 20px);
-    color: var(--text-bright);
+  .title-group {
     opacity: 0;
-    animation: title-appear 2s ease 0.5s forwards;
-    text-transform: uppercase;
-    text-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+    transform: translateY(16px) scale(0.98);
+    animation: fadeUp 2.5s cubic-bezier(0.16, 1, 0.3, 1) 3.2s forwards;
   }
 
-  @keyframes title-appear {
-    0% { opacity: 0; letter-spacing: clamp(14px, 2.5vw, 30px); filter: blur(4px); }
-    100% { opacity: 1; letter-spacing: clamp(8px, 1.5vw, 20px); filter: blur(0); }
+  .title {
+    font-family: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    font-weight: 400;
+    font-size: clamp(2.2rem, 5.5vw, 4.5rem);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+
+  .title .galahad {
+    display: block;
+    color: #c9a84c;
+    text-shadow: 0 0 60px rgba(201, 168, 76, 0.25), 0 0 120px rgba(201, 168, 76, 0.08);
+  }
+
+  .title .industries {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-weight: 200;
+    font-size: 0.32em;
+    letter-spacing: 0.55em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.4em;
   }
 
   .tagline {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Cormorant Garamond', Georgia, serif;
     font-weight: 300;
-    font-size: clamp(11px, 1.3vw, 15px);
-    color: var(--blue);
+    font-style: italic;
+    font-size: clamp(0.85rem, 1.8vw, 1.3rem);
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 1.8rem;
+    letter-spacing: 0.1em;
     opacity: 0;
-    margin-top: 20px;
-    letter-spacing: 3px;
-    animation: status-appear 1.5s ease 1.5s forwards;
+    animation: fadeIn 2.5s ease 4s forwards;
   }
 
-  @keyframes status-appear {
-    0% { opacity: 0; transform: translateY(8px); }
-    100% { opacity: 0.8; transform: translateY(0); }
-  }
-
-  .divider {
-    width: clamp(40px, 8vw, 80px);
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--amber), transparent);
-    margin: 24px auto;
+  .coming-soon {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(0.55rem, 0.85vw, 0.7rem);
+    letter-spacing: 0.45em;
+    text-transform: uppercase;
+    color: rgba(74, 158, 255, 0.4);
+    margin-top: 3rem;
     opacity: 0;
-    animation: status-appear 1s ease 1.2s forwards;
+    animation: fadeIn 2s ease 4.8s forwards;
   }
 
-  /* Bottom info */
-  .bottom-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0; right: 0;
-    z-index: 10;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 20px 40px;
+  .cta {
+    margin-top: 2rem;
     opacity: 0;
-    animation: status-appear 1s ease 2.5s forwards;
+    animation: fadeIn 2s ease 5.2s forwards;
+    pointer-events: auto;
   }
 
-  .bottom-bar span {
-    font-size: clamp(9px, 1vw, 11px);
-    color: var(--text-dim);
-    letter-spacing: 2px;
+  .cta a {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(0.6rem, 0.8vw, 0.72rem);
+    letter-spacing: 0.18em;
+    color: rgba(201, 168, 76, 0.55);
+    text-decoration: none;
+    border: 1px solid rgba(201, 168, 76, 0.18);
+    padding: 0.75em 2.2em;
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-block;
     text-transform: uppercase;
   }
 
-  .status-dot {
-    display: inline-block;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: var(--blue);
-    margin-right: 8px;
-    animation: pulse-dot 2s ease-in-out infinite;
-    vertical-align: middle;
+  .cta a:hover {
+    color: rgba(201, 168, 76, 0.9);
+    border-color: rgba(201, 168, 76, 0.5);
+    box-shadow: 0 0 40px rgba(201, 168, 76, 0.08), inset 0 0 20px rgba(201, 168, 76, 0.03);
+    transform: translateY(-1px);
   }
 
-  @keyframes pulse-dot {
-    0%, 100% { opacity: 0.5; box-shadow: 0 0 4px var(--blue-glow); }
-    50% { opacity: 1; box-shadow: 0 0 12px var(--blue-glow); }
+  @keyframes fadeUp {
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
 
-  /* Scanline overlay */
-  .scanlines {
-    position: fixed; inset: 0;
-    z-index: 90;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,0.03) 2px,
-      rgba(0,0,0,0.03) 4px
-    );
-  }
-
-  /* Vignette */
-  .vignette {
-    position: fixed; inset: 0;
-    z-index: 80;
-    pointer-events: none;
-    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+  @keyframes fadeIn {
+    to { opacity: 1; }
   }
 
   @media (max-width: 600px) {
-    #boot-screen { padding: 20px; }
-    .bottom-bar { padding: 15px 20px; flex-direction: column; gap: 8px; }
-    .crest-container { margin-bottom: 24px; }
+    .coming-soon { margin-top: 2rem; }
+    .cta { margin-top: 1.5rem; }
   }
 </style>
 </head>
 <body>
-
-<!-- Boot sequence -->
-<div id="boot-screen">
-  <div id="init-line">
-    <span class="init-text" id="init-text"></span><span id="cursor-init"></span>
-  </div>
-  <div id="boot-log" style="margin-top: 16px;"></div>
-</div>
-
-<!-- Main scene -->
-<div id="main-scene">
-  <canvas id="grid-canvas"></canvas>
-
-  <div class="crest-container">
-    <svg class="crest-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
-      <!-- Shield outline -->
-      <path class="crest-line" d="M100 10 L185 50 L185 140 Q185 190 100 230 Q15 190 15 140 L15 50 Z" style="animation-delay: 0s;" />
-      <!-- Inner shield border -->
-      <path class="crest-line" d="M100 25 L172 60 L172 138 Q172 182 100 218 Q28 182 28 138 L28 60 Z" style="animation-delay: 0.3s; stroke-width: 0.8; opacity: 0.5;" />
-      <!-- Sword vertical -->
-      <line class="crest-line" x1="100" y1="55" x2="100" y2="195" style="animation-delay: 0.8s; stroke-width: 1.2;" />
-      <!-- Sword crossguard -->
-      <line class="crest-line" x1="72" y1="95" x2="128" y2="95" style="animation-delay: 1.1s; stroke-width: 1.2;" />
-      <!-- Sword pommel -->
-      <circle class="crest-fill" cx="100" cy="55" r="4" style="animation-delay: 1.3s;" />
-      <!-- Crown / circuit nodes top -->
-      <circle class="crest-fill" cx="100" cy="75" r="2" />
-      <circle class="crest-fill" cx="72" cy="95" r="2.5" />
-      <circle class="crest-fill" cx="128" cy="95" r="2.5" />
-      <!-- Circuit trace left -->
-      <path class="crest-line inner-glow" d="M72 95 L55 120 L55 155 L75 175" style="animation-delay: 1.5s; stroke-width: 0.8;" />
-      <!-- Circuit trace right -->
-      <path class="crest-line inner-glow" d="M128 95 L145 120 L145 155 L125 175" style="animation-delay: 1.6s; stroke-width: 0.8;" />
-      <!-- Lower nodes -->
-      <circle class="crest-fill" cx="75" cy="175" r="2" />
-      <circle class="crest-fill" cx="125" cy="175" r="2" />
-      <circle class="crest-fill" cx="100" cy="195" r="3" />
-      <!-- Data flow dots along sword -->
-      <circle class="crest-fill" cx="100" cy="115" r="1.5" style="animation: fade-in-crest 0.5s ease 1.8s forwards, data-flow 3s ease-in-out 2.5s infinite;" />
-      <circle class="crest-fill" cx="100" cy="140" r="1.5" style="animation: fade-in-crest 0.5s ease 2s forwards, data-flow 3s ease-in-out 2.8s infinite;" />
-      <circle class="crest-fill" cx="100" cy="165" r="1.5" style="animation: fade-in-crest 0.5s ease 2.2s forwards, data-flow 3s ease-in-out 3.1s infinite;" />
-      <!-- Horizontal detail lines -->
-      <line class="crest-line inner-glow" x1="60" y1="140" x2="85" y2="140" style="animation-delay: 1.8s; stroke-width: 0.5;" />
-      <line class="crest-line inner-glow" x1="115" y1="140" x2="140" y2="140" style="animation-delay: 1.9s; stroke-width: 0.5;" />
-    </svg>
-    <style>
-      @keyframes data-flow {
-        0%, 100% { opacity: 0.3; }
-        50% { opacity: 0.9; }
-      }
-    </style>
-  </div>
-
-  <div class="title-container">
-    <div class="company-name">Galahad Industries</div>
-    <div class="divider"></div>
-    <div class="tagline">Systems online.</div>
-  </div>
-
-  <div class="bottom-bar">
-    <span><span class="status-dot"></span>All systems nominal</span>
-    <span>Est. 2026 &mdash; Brisbane, AU</span>
+<canvas id="c"></canvas>
+<div class="overlay">
+  <div class="title-group">
+    <h1 class="title">
+      <span class="galahad">Galahad</span>
+      <span class="industries">Industries</span>
+    </h1>
+    <p class="tagline">Where legacy meets intelligence.</p>
+    <p class="coming-soon">Coming Soon</p>
+    <div class="cta">
+      <a href="mailto:hello@galahadindustries.com">Get in Touch</a>
+    </div>
   </div>
 </div>
-
-<div class="scanlines"></div>
-<div class="vignette"></div>
 
 <script>
-(function() {
-  const bootScreen = document.getElementById('boot-screen');
-  const mainScene = document.getElementById('main-scene');
-  const initText = document.getElementById('init-text');
-  const initLine = document.getElementById('init-line');
-  const cursorInit = document.getElementById('cursor-init');
-  const bootLog = document.getElementById('boot-log');
+(() => {
+  'use strict';
 
-  // Boot messages
-  const bootMessages = [
-    { text: '[CORE]  Loading neural cores...', delay: 60 },
-    { text: '[CORE]  4 inference engines allocated', delay: 40, cls: 'success' },
-    { text: '[MEM]   Initializing knowledge graph...', delay: 55 },
-    { text: '[MEM]   Vector store mounted — 2.4M embeddings', delay: 45, cls: 'success' },
-    { text: '[NET]   Connecting secure mesh network...', delay: 50 },
-    { text: '[NET]   Encrypted channels established', delay: 40, cls: 'success' },
-    { text: '[SYS]   Calibrating inference engine...', delay: 55 },
-    { text: '[SYS]   Model weights verified — integrity OK', delay: 40, cls: 'success' },
-    { text: '[AUTH]  Loading quest parameters...', delay: 60 },
-    { text: '[AUTH]  Directive: Undercut legacy enterprise by 3-5x', delay: 45, cls: 'warn' },
-    { text: '[PLAN]  Target sectors: ERP, CRM, Supply Chain', delay: 50 },
-    { text: '[PLAN]  Competitive analysis loaded', delay: 40, cls: 'success' },
-    { text: '[AGI]   Reasoning modules online', delay: 55 },
-    { text: '[AGI]   Agentic workflows initialized', delay: 45, cls: 'success' },
-    { text: '[BOOT]  All subsystems nominal', delay: 50, cls: 'success' },
-    { text: '[BOOT]  Galahad Industries — READY', delay: 0, cls: 'warn' },
-  ];
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
 
-  // Type text with variable speed
-  function typeText(element, text, baseSpeed, callback) {
-    let i = 0;
-    function type() {
-      if (i < text.length) {
-        element.textContent += text[i];
-        i++;
-        // Variable speed
-        let speed = baseSpeed + Math.random() * 40;
-        // Pause slightly on periods and ellipses
-        if (text[i-1] === '.') speed += 80;
-        setTimeout(type, speed);
-      } else if (callback) {
-        callback();
-      }
-    }
-    type();
+  // --- State ---
+  let W, H, cx, cy, dpr;
+  let mouseX = -9999, mouseY = -9999;
+  let frame = 0;
+
+  // --- Config ---
+  const NODE_COUNT = 14;
+  const GALAHAD_IDX = 0;
+  const STAR_COUNT = 280;
+  const TILT = 0.58; // radians, ~33 degrees
+  const PERSPECTIVE = 900;
+  const ROTATION_SPEED = 0.0006;
+
+  // Colors
+  const BLUE = [74, 158, 255];
+  const GOLD = [201, 168, 76];
+
+  // --- Stars ---
+  const stars = Array.from({ length: STAR_COUNT }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: Math.random() * 1.2 + 0.2,
+    br: Math.random() * 0.35 + 0.08,
+    sp: Math.random() * 0.015 + 0.003,
+    ph: Math.random() * Math.PI * 2
+  }));
+
+  // --- Nodes ---
+  const nodes = Array.from({ length: NODE_COUNT }, (_, i) => {
+    const a = (i / NODE_COUNT) * Math.PI * 2 - Math.PI / 2;
+    return {
+      baseAngle: a,
+      pulsePh: Math.random() * Math.PI * 2,
+      pulseSp: 0.007 + Math.random() * 0.005,
+      isGalahad: i === GALAHAD_IDX,
+      hover: 0 // smooth 0-1
+    };
+  });
+
+  // --- Edges ---
+  const edgeSet = new Set();
+  const edges = [];
+
+  function addEdge(a, b) {
+    if (a === b) return;
+    const key = Math.min(a, b) * 100 + Math.max(a, b);
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+    edges.push({ a, b, particles: [] });
   }
 
-  // Add a boot log line
-  function addBootLine(msg, callback) {
-    const line = document.createElement('div');
-    line.className = 'boot-line';
+  // Ring
+  for (let i = 0; i < NODE_COUNT; i++) addEdge(i, (i + 1) % NODE_COUNT);
+  // Skip-1
+  for (let i = 0; i < NODE_COUNT; i++) addEdge(i, (i + 2) % NODE_COUNT);
+  // Diameter crosses (selective)
+  for (let i = 0; i < NODE_COUNT; i += 3) addEdge(i, (i + Math.floor(NODE_COUNT / 2)) % NODE_COUNT);
+  for (let i = 0; i < NODE_COUNT; i += 4) addEdge(i, (i + Math.floor(NODE_COUNT / 3)) % NODE_COUNT);
+  // Galahad hub spokes
+  for (let i = 2; i < NODE_COUNT; i += 3) addEdge(GALAHAD_IDX, i);
 
-    // Parse the message for bracket prefix
-    const match = msg.text.match(/^(\[[A-Z]+\]\s*)(.*)/);
-    if (match) {
-      const prefix = document.createElement('span');
-      prefix.className = 'prefix';
-      prefix.textContent = match[1];
-      line.appendChild(prefix);
-
-      const content = document.createElement('span');
-      if (msg.cls) content.className = msg.cls;
-      content.textContent = match[2];
-      line.appendChild(content);
-    } else {
-      line.textContent = msg.text;
-    }
-
-    bootLog.appendChild(line);
-
-    // Trigger visibility
-    requestAnimationFrame(() => {
-      line.classList.add('visible');
-    });
-
-    setTimeout(() => {
-      if (callback) callback();
-    }, msg.delay + 60 + Math.random() * 80);
-  }
-
-  // Run boot messages sequentially
-  function runBootSequence(messages, index, callback) {
-    if (index >= messages.length) {
-      if (callback) setTimeout(callback, 600);
-      return;
-    }
-    addBootLine(messages[index], () => {
-      runBootSequence(messages, index + 1, callback);
+  // --- Particles ---
+  function spawnParticle(edge) {
+    const fwd = Math.random() > 0.5;
+    edge.particles.push({
+      t: fwd ? 0 : 1,
+      v: (0.0015 + Math.random() * 0.003) * (fwd ? 1 : -1),
+      sz: Math.random() * 1.4 + 0.5
     });
   }
 
-  // Phase 1: Blinking cursor for 1.2s
-  setTimeout(() => {
-    // Phase 2: Type "INITIALIZING..."
-    typeText(initText, 'INITIALIZING...', 70, () => {
-      // Phase 3: Pause, then shift up and show boot log
-      setTimeout(() => {
-        initLine.classList.add('shifted');
-        cursorInit.style.display = 'none';
+  // Seed
+  edges.forEach(e => { for (let i = 0; i < 2; i++) spawnParticle(e); });
 
-        setTimeout(() => {
-          // Phase 4: Boot messages
-          runBootSequence(bootMessages, 0, () => {
-            // Phase 5: Transition to main scene
-            setTimeout(() => {
-              bootScreen.classList.add('fade-out');
-              mainScene.classList.add('visible');
-              initGrid();
+  // --- Resize ---
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2;
+    cy = H / 2;
+  }
 
-              setTimeout(() => {
-                bootScreen.style.display = 'none';
-              }, 1000);
-            }, 800);
-          });
-        }, 400);
-      }, 500);
-    });
-  }, 1200);
+  // --- Projection ---
+  function tableRadius() {
+    return Math.min(W, H) * 0.28;
+  }
 
-  // === GRID BACKGROUND ===
-  function initGrid() {
-    const canvas = document.getElementById('grid-canvas');
-    const ctx = canvas.getContext('2d');
-    let w, h, cols, rows, cellSize;
-    const pulses = [];
-    const maxPulses = 8;
+  function project(angle, rot) {
+    const r = tableRadius();
+    const a = angle + rot;
+    const cosT = Math.cos(TILT);
+    const sinT = Math.sin(TILT);
 
-    function resize() {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
-      cellSize = Math.max(40, Math.min(60, w / 25));
-      cols = Math.ceil(w / cellSize) + 1;
-      rows = Math.ceil(h / cellSize) + 1;
+    const x3 = Math.cos(a) * r;
+    const y3 = Math.sin(a) * r * cosT;
+    const z3 = Math.sin(a) * r * sinT;
+
+    const s = PERSPECTIVE / (PERSPECTIVE + z3);
+    return { x: cx + x3 * s, y: cy + y3 * s, s, z: z3 };
+  }
+
+  // --- Helpers ---
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function rgba(c, a) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+  function lerpColor(c1, c2, t) {
+    return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+  }
+
+  // --- Draw ---
+  function render() {
+    frame++;
+    const rot = frame * ROTATION_SPEED;
+
+    // Intro easing (first 3s at 60fps = 180 frames)
+    const intro = Math.min(frame / 180, 1);
+    const nodeReveal = Math.max(0, (intro - 0.05) / 0.55);
+    const edgeReveal = Math.max(0, (intro - 0.35) / 0.65);
+    const particleReveal = edgeReveal > 0.7 ? 1 : 0;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    const bg = ctx.createRadialGradient(cx, cy * 0.9, 0, cx, cy, Math.max(W, H) * 0.75);
+    bg.addColorStop(0, '#080c18');
+    bg.addColorStop(0.4, '#050810');
+    bg.addColorStop(1, '#000000');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Stars
+    for (const s of stars) {
+      const flk = Math.sin(frame * s.sp + s.ph) * 0.5 + 0.5;
+      const a = s.br * (0.4 + flk * 0.6) * Math.min(intro * 2.5, 1);
+      ctx.fillStyle = rgba([180, 200, 240], a);
+      ctx.beginPath();
+      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    resize();
-    window.addEventListener('resize', resize);
+    // Compute all node screen positions
+    const pos = nodes.map(n => project(n.baseAngle, rot));
 
-    // Pulse class
-    class Pulse {
-      constructor() {
-        this.reset();
-      }
-      reset() {
-        // Start from a random grid intersection
-        const col = Math.floor(Math.random() * cols);
-        const row = Math.floor(Math.random() * rows);
-        this.x = col * cellSize;
-        this.y = row * cellSize;
-        this.horizontal = Math.random() > 0.5;
-        this.speed = 1 + Math.random() * 2;
-        this.direction = Math.random() > 0.5 ? 1 : -1;
-        this.length = 40 + Math.random() * 80;
-        this.alpha = 0.15 + Math.random() * 0.2;
-        this.life = 0;
-        this.maxLife = 200 + Math.random() * 300;
-      }
-      update() {
-        if (this.horizontal) {
-          this.x += this.speed * this.direction;
-        } else {
-          this.y += this.speed * this.direction;
-        }
-        this.life++;
-        if (this.life > this.maxLife || this.x < -100 || this.x > w + 100 || this.y < -100 || this.y > h + 100) {
-          this.reset();
-        }
-      }
-      draw(ctx) {
-        const fade = Math.min(1, this.life / 30) * Math.min(1, (this.maxLife - this.life) / 30);
-        const a = this.alpha * fade;
-        if (this.horizontal) {
-          const grad = ctx.createLinearGradient(this.x - this.length, this.y, this.x, this.y);
-          grad.addColorStop(0, `rgba(74, 158, 255, 0)`);
-          grad.addColorStop(0.5, `rgba(74, 158, 255, ${a})`);
-          grad.addColorStop(1, `rgba(74, 158, 255, 0)`);
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(this.x - this.length, this.y);
-          ctx.lineTo(this.x, this.y);
-          ctx.stroke();
-        } else {
-          const grad = ctx.createLinearGradient(this.x, this.y - this.length, this.x, this.y);
-          grad.addColorStop(0, `rgba(74, 158, 255, 0)`);
-          grad.addColorStop(0.5, `rgba(74, 158, 255, ${a})`);
-          grad.addColorStop(1, `rgba(74, 158, 255, 0)`);
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(this.x, this.y - this.length);
-          ctx.lineTo(this.x, this.y);
-          ctx.stroke();
-        }
-      }
+    // Update hover
+    for (let i = 0; i < nodes.length; i++) {
+      const dx = mouseX - pos[i].x;
+      const dy = mouseY - pos[i].y;
+      const near = Math.sqrt(dx * dx + dy * dy) < 45;
+      nodes[i].hover += ((near ? 1 : 0) - nodes[i].hover) * 0.07;
     }
 
-    // Initialize pulses
-    for (let i = 0; i < maxPulses; i++) {
-      const p = new Pulse();
-      p.life = Math.floor(Math.random() * p.maxLife);
-      pulses.push(p);
-    }
+    // Sort edges by depth (far first)
+    const edgeOrder = edges.map((e, i) => i)
+      .sort((a, b) => {
+        const za = pos[edges[a].a].z + pos[edges[a].b].z;
+        const zb = pos[edges[b].a].z + pos[edges[b].b].z;
+        return zb - za;
+      });
 
-    function drawGrid() {
-      ctx.clearRect(0, 0, w, h);
+    // Draw edges
+    for (const ei of edgeOrder) {
+      const edge = edges[ei];
+      const pa = pos[edge.a];
+      const pb = pos[edge.b];
+      const na = nodes[edge.a];
+      const nb = nodes[edge.b];
+      const avgS = (pa.s + pb.s) / 2;
+      const depth01 = (avgS - 0.88) / 0.24;
+      const depthA = lerp(0.08, 0.35, Math.max(0, Math.min(1, depth01)));
+      const hv = Math.max(na.hover, nb.hover);
+      const isGold = na.isGalahad || nb.isGalahad;
+      const baseColor = isGold ? lerpColor(BLUE, GOLD, 0.4) : BLUE;
 
-      // Grid lines
-      ctx.strokeStyle = 'rgba(74, 158, 255, 0.04)';
-      ctx.lineWidth = 0.5;
-
-      for (let x = 0; x <= cols; x++) {
+      // Main line
+      const lineA = (depthA + hv * 0.25) * edgeReveal;
+      if (lineA > 0.005) {
+        ctx.strokeStyle = rgba(baseColor, lineA);
+        ctx.lineWidth = (0.6 + hv * 1.2) * avgS;
         ctx.beginPath();
-        ctx.moveTo(x * cellSize, 0);
-        ctx.lineTo(x * cellSize, h);
-        ctx.stroke();
-      }
-      for (let y = 0; y <= rows; y++) {
-        ctx.beginPath();
-        ctx.moveTo(0, y * cellSize);
-        ctx.lineTo(w, y * cellSize);
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
         ctx.stroke();
       }
 
-      // Grid intersections — subtle dots
-      ctx.fillStyle = 'rgba(74, 158, 255, 0.06)';
-      for (let x = 0; x <= cols; x++) {
-        for (let y = 0; y <= rows; y++) {
+      // Glow on hover
+      if (hv > 0.02) {
+        const glowC = isGold ? GOLD : BLUE;
+        ctx.strokeStyle = rgba(glowC, hv * 0.1 * edgeReveal);
+        ctx.lineWidth = (4 + hv * 5) * avgS;
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.stroke();
+      }
+
+      // Particles
+      if (particleReveal) {
+        // Spawn
+        if (Math.random() < 0.015 + (isGold ? 0.015 : 0)) spawnParticle(edge);
+
+        for (let pi = edge.particles.length - 1; pi >= 0; pi--) {
+          const p = edge.particles[pi];
+          p.t += p.v;
+          if (p.t < 0 || p.t > 1) {
+            edge.particles.splice(pi, 1);
+            continue;
+          }
+
+          const px = lerp(pa.x, pb.x, p.t);
+          const py = lerp(pa.y, pb.y, p.t);
+          const ps = lerp(pa.s, pb.s, p.t);
+          const fade = Math.min(p.t * 6, (1 - p.t) * 6, 1);
+          const col = isGold ? GOLD : BLUE;
+          const alpha = fade * 0.7 * ps;
+
+          // Glow
+          const gr = 5 * ps;
+          const g = ctx.createRadialGradient(px, py, 0, px, py, gr);
+          g.addColorStop(0, rgba(col, alpha));
+          g.addColorStop(1, rgba(col, 0));
+          ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(x * cellSize, y * cellSize, 1, 0, Math.PI * 2);
+          ctx.arc(px, py, gr, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Core
+          ctx.fillStyle = rgba([255, 255, 255], alpha * 0.7);
+          ctx.beginPath();
+          ctx.arc(px, py, p.sz * ps * 0.8, 0, Math.PI * 2);
           ctx.fill();
         }
       }
-
-      // Draw pulses
-      for (const p of pulses) {
-        p.update();
-        p.draw(ctx);
-      }
-
-      requestAnimationFrame(drawGrid);
     }
 
-    drawGrid();
+    // Sort nodes by depth (far first) then draw
+    const nodeOrder = nodes.map((_, i) => i)
+      .sort((a, b) => pos[b].z - pos[a].z);
+
+    for (const ni of nodeOrder) {
+      const node = nodes[ni];
+      const p = pos[ni];
+
+      const appear = Math.min(Math.max((nodeReveal - ni / NODE_COUNT) * NODE_COUNT / 3, 0), 1);
+      if (appear < 0.001) continue;
+
+      const pulse = Math.sin(frame * node.pulseSp + node.pulsePh) * 0.5 + 0.5;
+      const base = node.isGalahad ? 5.5 : 3.5;
+      const sz = (base + pulse * 1.5 + node.hover * 2.5) * p.s * appear;
+      const col = node.isGalahad ? GOLD : BLUE;
+      const glowBase = node.isGalahad ? 0.35 : 0.18;
+
+      // Outer glow
+      const glowR = (22 + pulse * 12 + node.hover * 18) * p.s * appear;
+      const og = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowR);
+      og.addColorStop(0, rgba(col, (glowBase + node.hover * 0.2) * appear));
+      og.addColorStop(0.35, rgba(col, 0.06 * appear));
+      og.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = og;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Core gradient
+      const cg = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, sz);
+      cg.addColorStop(0, rgba([255, 255, 255], (0.85 + node.hover * 0.15) * appear));
+      cg.addColorStop(0.45, rgba(col, (0.75 + pulse * 0.25) * appear));
+      cg.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, sz, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hot center
+      ctx.fillStyle = rgba([255, 255, 255], (0.6 + pulse * 0.4) * appear);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, sz * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Subtle center ambient glow
+    const centerR = tableRadius() * 0.45;
+    const cg2 = ctx.createRadialGradient(cx, cy, 0, cx, cy, centerR);
+    cg2.addColorStop(0, rgba(GOLD, 0.025 * intro));
+    cg2.addColorStop(0.6, rgba(BLUE, 0.008 * intro));
+    cg2.addColorStop(1, rgba([0, 0, 0], 0));
+    ctx.fillStyle = cg2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, centerR, 0, Math.PI * 2);
+    ctx.fill();
+
+    requestAnimationFrame(render);
   }
+
+  // --- Events ---
+  window.addEventListener('resize', resize);
+  window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+  window.addEventListener('touchmove', e => { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; }, { passive: true });
+  window.addEventListener('touchend', () => { mouseX = mouseY = -9999; });
+
+  resize();
+  requestAnimationFrame(render);
 })();
 </script>
 </body>
