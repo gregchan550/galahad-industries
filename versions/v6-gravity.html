@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries — The Pull of Progress</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;cursor:crosshair}
+  canvas{display:block;position:fixed;top:0;left:0;z-index:0}
+  #overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .title-wrap{text-align:center;transform:translateY(-10px)}
+  .title{
+    font-size:clamp(24px,4.8vw,68px);
+    font-weight:100;
+    letter-spacing:clamp(10px,3vw,48px);
+    color:rgba(201,168,76,0);
+    text-transform:uppercase;
+    line-height:1.2;
+    animation:titleIn 4s ease-out 1s forwards;
+  }
+  .subtitle{
+    font-size:clamp(10px,1.2vw,17px);
+    font-weight:300;
+    letter-spacing:clamp(4px,1vw,16px);
+    color:rgba(160,160,180,0);
+    margin-top:clamp(10px,2vh,24px);
+    text-transform:uppercase;
+    animation:subtitleIn 3s ease-out 2.5s forwards;
+  }
+  @keyframes titleIn{
+    0%{color:rgba(201,168,76,0);text-shadow:none;letter-spacing:clamp(14px,4vw,60px)}
+    60%{color:rgba(201,168,76,0.85);text-shadow:0 0 80px rgba(201,168,76,0.4),0 0 160px rgba(201,168,76,0.15)}
+    100%{color:rgba(201,168,76,0.8);text-shadow:0 0 60px rgba(201,168,76,0.25),0 0 120px rgba(201,168,76,0.08);letter-spacing:clamp(10px,3vw,48px)}
+  }
+  @keyframes subtitleIn{
+    0%{color:rgba(160,160,180,0)}
+    100%{color:rgba(160,160,180,0.45)}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="overlay">
+  <div class="title-wrap">
+    <div class="title">Galahad Industries</div>
+    <div class="subtitle">The pull of progress.</div>
+  </div>
+</div>
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let W, H, cx, cy, minDim;
+  let mouse = {x:-9999, y:-9999, active:false};
+  let time = 0;
+  const TAU = Math.PI * 2;
+  const DISK_TILT = 0.38; // tilt angle in radians (~22 degrees from edge-on)
+  const cosTilt = Math.cos(DISK_TILT);
+  const sinTilt = Math.sin(DISK_TILT);
+
+  function resize(){
+    W = window.innerWidth; H = window.innerHeight;
+    cx = W/2; cy = H/2;
+    minDim = Math.min(W,H);
+    canvas.width = W; canvas.height = H;
+  }
+
+  // --- BACKGROUND STARS ---
+  const NUM_STARS = 800;
+  let stars = [];
+  function initStars(){
+    stars = [];
+    for(let i=0;i<NUM_STARS;i++){
+      let angle = Math.random()*TAU;
+      let dist = Math.random();
+      stars.push({
+        ox: Math.random()*2-1, oy: Math.random()*2-1, // normalized -1..1
+        r: Math.pow(Math.random(),2)*1.6+0.2,
+        brightness: Math.random()*0.4+0.6,
+        twinkleSpeed: Math.random()*1.5+0.5,
+        twinklePhase: Math.random()*TAU,
+        hue: Math.random()<0.1 ? (Math.random()>0.5?40:220) : 0, // some colored stars
+        sat: Math.random()*30
+      });
+    }
+  }
+
+  // --- DRIFT PARTICLES (pulled toward center) ---
+  const NUM_DRIFT = 400;
+  let drift = [];
+  function spawnDrift(initial){
+    let angle = Math.random()*TAU;
+    let maxR = Math.sqrt(W*W+H*H)*0.6;
+    let dist = initial ? (Math.random()*0.8+0.2)*maxR : (Math.random()*0.3+0.7)*maxR;
+    return {
+      x: Math.cos(angle)*dist,
+      y: Math.sin(angle)*dist,
+      vx:0, vy:0,
+      r: Math.random()*1.0+0.2,
+      brightness: Math.random()*0.3+0.3
+    };
+  }
+  function initDrift(){
+    drift=[];
+    for(let i=0;i<NUM_DRIFT;i++) drift.push(spawnDrift(true));
+  }
+
+  // --- ACCRETION DISK ---
+  const NUM_DISK = 2000;
+  let disk = [];
+  function spawnDisk(){
+    // Power-law distribution: more particles at inner radii
+    let u = Math.random();
+    let orbitR = 30 + Math.pow(u, 0.7) * 280; // 30..310 range, clustered inner
+    let angle = Math.random()*TAU;
+    // Kepler speed: v proportional to r^(-0.5)
+    let speed = 1.2 / Math.sqrt(orbitR/30);
+    return {
+      angle: angle,
+      orbitR: orbitR,
+      speed: speed * (0.9 + Math.random()*0.2),
+      eccen: Math.random()*0.08,
+      phase: Math.random()*TAU,
+      r: Math.pow(Math.random(),0.5)*1.4+0.3,
+      brightness: Math.random()*0.4+0.6,
+      vertOffset: (Math.random()-0.5)*4 * (orbitR/300), // thicker at outer edge
+    };
+  }
+  function initDisk(){
+    disk=[];
+    for(let i=0;i<NUM_DISK;i++) disk.push(spawnDisk());
+  }
+
+  // --- RELATIVISTIC JETS ---
+  const NUM_JETS = 200;
+  let jets = [];
+  function spawnJet(){
+    let dir = Math.random()>0.5?1:-1;
+    return {
+      x:(Math.random()-0.5)*4,
+      y:0,
+      vy: dir*(Math.random()*4+2.5),
+      vx:(Math.random()-0.5)*0.2,
+      life: Math.random(),
+      speed: Math.random()*0.4+0.9,
+      r: Math.random()*1.2+0.3,
+      bright: Math.random()*0.5+0.5
+    };
+  }
+  function initJets(){
+    jets=[];
+    for(let i=0;i<NUM_JETS;i++) jets.push(spawnJet());
+  }
+
+  // --- GRAVITATIONAL LENSING ---
+  function lensDistort(sx, sy){
+    let dx = sx-cx, dy = sy-cy;
+    let dist = Math.sqrt(dx*dx+dy*dy);
+    let einsteinR = minDim*0.12;
+    if(dist < einsteinR*2.5 && dist > 2){
+      // Approximate gravitational lensing: deflection ~ 1/r
+      let deflection = einsteinR*einsteinR / (dist*dist+einsteinR*0.5);
+      let factor = 1 + deflection * 0.8;
+      // Tangential stretching near Einstein ring
+      let tangentialStretch = 1 + (einsteinR/(dist+10))*0.3;
+      return {
+        x: cx + dx*factor,
+        y: cy + dy*factor,
+        stretch: tangentialStretch,
+        brightness: 1 + deflection*0.5
+      };
+    }
+    return {x:sx, y:sy, stretch:1, brightness:1};
+  }
+
+  // --- DISK COLOR ---
+  function diskColor(orbitR, angle, brightness){
+    let t = Math.min(1, (orbitR-30)/280);
+    let r,g,b;
+    if(t < 0.15){
+      // Innermost: white-hot
+      let s = t/0.15;
+      r = 255; g = 240-s*10; b = 220-s*100;
+    } else if(t < 0.4){
+      // Hot gold
+      let s = (t-0.15)/0.25;
+      r = 255-s*40; g = 230-s*60; b = 120-s*40;
+    } else if(t < 0.65){
+      // Gold to amber
+      let s = (t-0.4)/0.25;
+      r = 215-s*30; g = 170-s*20; b = 80+s*10;
+    } else {
+      // Outer: cool blue
+      let s = (t-0.65)/0.35;
+      r = 185-s*120; g = 150-s*30; b = 90+s*165;
+    }
+    // Doppler: approaching side brighter, receding dimmer
+    let doppler = 1 + 0.25*Math.cos(angle);
+    let a = brightness * doppler * (0.55 + 0.45*(1-t));
+    return {r:r|0, g:g|0, b:b|0, a:Math.min(1,a)};
+  }
+
+  // --- INPUT ---
+  document.addEventListener('mousemove', e=>{mouse.x=e.clientX;mouse.y=e.clientY;mouse.active=true});
+  document.addEventListener('mouseleave', ()=>{mouse.active=false});
+  document.addEventListener('touchmove', e=>{
+    e.preventDefault();mouse.x=e.touches[0].clientX;mouse.y=e.touches[0].clientY;mouse.active=true;
+  },{passive:false});
+  document.addEventListener('touchend', ()=>{mouse.active=false});
+
+  // --- RENDER LOOP ---
+  let lastT = 0;
+  function render(ts){
+    let dt = Math.min(0.033, (ts-lastT)/1000); // cap at 33ms
+    lastT = ts;
+    time += dt;
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,W,H);
+
+    // Subtle deep-space nebula
+    let neb = ctx.createRadialGradient(cx,cy,0,cx,cy,minDim*0.6);
+    neb.addColorStop(0,'rgba(15,8,30,0.2)');
+    neb.addColorStop(0.4,'rgba(8,12,25,0.1)');
+    neb.addColorStop(1,'transparent');
+    ctx.fillStyle = neb;
+    ctx.fillRect(0,0,W,H);
+
+    let bhR = minDim*0.04; // black hole visual radius
+    let diskScale = minDim * 0.0012; // scale disk orbits to screen
+
+    // --- BACKGROUND STARS with lensing ---
+    for(let s of stars){
+      let sx = cx + s.ox*(W*0.55);
+      let sy = cy + s.oy*(H*0.55);
+      let lens = lensDistort(sx, sy);
+      let twinkle = 0.65 + 0.35*Math.sin(time*s.twinkleSpeed+s.twinklePhase);
+      let alpha = s.brightness*twinkle*lens.brightness;
+
+      if(lens.stretch > 1.08){
+        // Stretched into arcs near the Einstein ring
+        let dx = lens.x-cx, dy = lens.y-cy;
+        let ang = Math.atan2(dy,dx) + Math.PI*0.5; // tangential
+        let len = s.r*lens.stretch*3;
+        ctx.beginPath();
+        ctx.moveTo(lens.x-Math.cos(ang)*len, lens.y-Math.sin(ang)*len);
+        ctx.lineTo(lens.x+Math.cos(ang)*len, lens.y+Math.sin(ang)*len);
+        let c = s.hue ? `hsla(${s.hue},${s.sat}%,80%,${alpha*0.8})` : `rgba(210,215,240,${alpha*0.8})`;
+        ctx.strokeStyle = c;
+        ctx.lineWidth = s.r*0.7;
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(lens.x, lens.y, s.r, 0, TAU);
+        let c = s.hue ? `hsla(${s.hue},${s.sat}%,85%,${alpha})` : `rgba(220,225,245,${alpha})`;
+        ctx.fillStyle = c;
+        ctx.fill();
+      }
+    }
+
+    // --- DRIFT PARTICLES ---
+    for(let i=0;i<drift.length;i++){
+      let p = drift[i];
+      let dx = -p.x, dy = -p.y;
+      let dist = Math.sqrt(dx*dx+dy*dy)+1;
+
+      // Central gravity
+      let force = 1200/(dist*dist+3000);
+      p.vx += dx/dist*force;
+      p.vy += dy/dist*force;
+
+      // Slight tangential to create spiral
+      p.vx += -dy/dist*force*0.15;
+      p.vy += dx/dist*force*0.15;
+
+      // Mouse gravity
+      if(mouse.active){
+        let mdx = (mouse.x-cx)-p.x;
+        let mdy = (mouse.y-cy)-p.y;
+        let md = Math.sqrt(mdx*mdx+mdy*mdy)+1;
+        if(md < 250){
+          let mf = 300/(md*md+800);
+          p.vx += mdx/md*mf;
+          p.vy += mdy/md*mf;
+          // Tangential orbit
+          p.vx += -mdy/md*mf*0.6;
+          p.vy += mdx/md*mf*0.6;
+        }
+      }
+
+      p.vx *= 0.992; p.vy *= 0.992;
+      p.x += p.vx; p.y += p.vy;
+
+      if(dist < 20){ drift[i]=spawnDrift(false); continue; }
+
+      let alpha = Math.min(1, dist/120)*p.brightness;
+      let sx = cx+p.x, sy = cy+p.y;
+      let speed = Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+
+      if(speed > 0.8){
+        ctx.beginPath();
+        ctx.moveTo(sx,sy);
+        ctx.lineTo(sx-p.vx*4, sy-p.vy*4);
+        ctx.strokeStyle = `rgba(180,190,220,${alpha*0.3})`;
+        ctx.lineWidth = p.r*0.4;
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(sx,sy,p.r,0,TAU);
+      ctx.fillStyle = `rgba(190,200,230,${alpha})`;
+      ctx.fill();
+    }
+
+    // --- ACCRETION DISK ---
+    // Project all particles to screen, sort by depth
+    let projected = [];
+    for(let p of disk){
+      p.angle += p.speed*dt*1.8;
+      let r = p.orbitR * (1 + p.eccen*Math.sin(p.angle*2+p.phase));
+
+      // Position in disk plane (X-Z plane)
+      let px = Math.cos(p.angle)*r*diskScale;
+      let pz = Math.sin(p.angle)*r*diskScale;
+      let py = p.vertOffset*diskScale;
+
+      // Tilt around X axis
+      let sy = py*cosTilt - pz*sinTilt;
+      let sz = py*sinTilt + pz*cosTilt;
+
+      let col = diskColor(p.orbitR, p.angle, p.brightness*(0.75+0.25*Math.sin(time*1.5+p.angle*2)));
+      let screenR = p.r * (0.7 + 0.5*(1-Math.min(1,(p.orbitR-30)/280)));
+
+      projected.push({
+        x: cx+px, y: cy+sy, z: sz,
+        r: screenR,
+        red: col.r, green: col.g, blue: col.b,
+        alpha: col.a,
+        orbitR: p.orbitR,
+        inner: p.orbitR < 80
+      });
+    }
+
+    // Sort: back to front
+    projected.sort((a,b) => a.z - b.z);
+
+    // Split at z=0 for layering behind/infront of black hole
+    let behindDisk = [];
+    let frontDisk = [];
+    for(let p of projected){
+      if(p.z <= 0) behindDisk.push(p);
+      else frontDisk.push(p);
+    }
+
+    // --- Interstellar-style: lensed top arc ---
+    // The accretion disk behind the black hole gets lensed over the top
+    // We draw a second, warped copy of back-side particles above
+    let lensedArc = [];
+    for(let p of behindDisk){
+      // Only particles that would be behind and above/below after lensing
+      let dx = p.x-cx, dy = p.y-cy;
+      let dist = Math.sqrt(dx*dx+dy*dy);
+      if(dist < bhR*5 && dist > bhR*0.5){
+        // Mirror over the top with distortion
+        let lensStrength = 1 - dist/(bhR*5);
+        lensStrength *= lensStrength;
+        let offsetY = -bhR*2*lensStrength - dist*0.4*lensStrength;
+        lensedArc.push({
+          ...p,
+          y: cy + offsetY + (p.y-cy)*0.3,
+          x: p.x + (p.x-cx)*lensStrength*0.2,
+          alpha: p.alpha * lensStrength * 0.6,
+          r: p.r * (1+lensStrength*0.5)
+        });
+      }
+    }
+
+    // Draw order: behind disk -> lensed arc -> black hole -> jets -> front disk
+
+    // BEHIND DISK
+    drawParticles(behindDisk);
+
+    // LENSED ARC (Interstellar ring above black hole)
+    drawParticles(lensedArc);
+
+    // --- GLOW LAYERS ---
+    // Outer accretion glow
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.scale(1, cosTilt);
+    let diskGlow = ctx.createRadialGradient(0,0,bhR*1.2, 0,0, 300*diskScale);
+    diskGlow.addColorStop(0,'rgba(255,220,150,0.06)');
+    diskGlow.addColorStop(0.2,'rgba(201,168,76,0.04)');
+    diskGlow.addColorStop(0.5,'rgba(201,168,76,0.015)');
+    diskGlow.addColorStop(0.8,'rgba(74,158,255,0.008)');
+    diskGlow.addColorStop(1,'transparent');
+    ctx.fillStyle = diskGlow;
+    ctx.beginPath();
+    ctx.arc(0,0,300*diskScale,0,TAU);
+    ctx.fill();
+    ctx.restore();
+
+    // Photon sphere glow
+    let psGlow = ctx.createRadialGradient(cx,cy,bhR*0.9, cx,cy,bhR*3);
+    psGlow.addColorStop(0,'rgba(255,230,170,0.12)');
+    psGlow.addColorStop(0.3,'rgba(201,168,76,0.06)');
+    psGlow.addColorStop(0.6,'rgba(201,168,76,0.025)');
+    psGlow.addColorStop(1,'transparent');
+    ctx.fillStyle = psGlow;
+    ctx.beginPath();
+    ctx.arc(cx,cy,bhR*3,0,TAU);
+    ctx.fill();
+
+    // Photon ring (thin bright ring)
+    ctx.beginPath();
+    ctx.arc(cx,cy,bhR*1.35,0,TAU);
+    let prAlpha = 0.12+0.04*Math.sin(time*2);
+    ctx.strokeStyle = `rgba(255,220,150,${prAlpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Einstein ring (faint outer ring from lensing)
+    ctx.beginPath();
+    ctx.arc(cx,cy,minDim*0.12,0,TAU);
+    ctx.strokeStyle = 'rgba(200,210,240,0.04)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // --- BLACK HOLE (event horizon) ---
+    let bhGrad = ctx.createRadialGradient(cx,cy,0,cx,cy,bhR*1.1);
+    bhGrad.addColorStop(0,'#000');
+    bhGrad.addColorStop(0.8,'#000');
+    bhGrad.addColorStop(0.95,'rgba(0,0,0,0.98)');
+    bhGrad.addColorStop(1,'rgba(0,0,0,0.85)');
+    ctx.fillStyle = bhGrad;
+    ctx.beginPath();
+    ctx.arc(cx,cy,bhR*1.1,0,TAU);
+    ctx.fill();
+
+    // --- RELATIVISTIC JETS ---
+    drawJets(dt, bhR);
+
+    // FRONT DISK
+    drawParticles(frontDisk);
+
+    // Hot inner ring highlight (on top of everything)
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.scale(1,cosTilt);
+    ctx.beginPath();
+    ctx.arc(0,0,35*diskScale,0,TAU);
+    let innerGlow = ctx.createRadialGradient(0,0,25*diskScale,0,0,50*diskScale);
+    innerGlow.addColorStop(0,'rgba(255,240,200,0.08)');
+    innerGlow.addColorStop(0.5,'rgba(255,200,100,0.03)');
+    innerGlow.addColorStop(1,'transparent');
+    ctx.fillStyle = innerGlow;
+    ctx.fill();
+    ctx.restore();
+
+    // --- MOUSE GRAVITY WELL ---
+    if(mouse.active){
+      let md = Math.sqrt((mouse.x-cx)**2+(mouse.y-cy)**2);
+      if(md > 60){
+        let mg = ctx.createRadialGradient(mouse.x,mouse.y,0,mouse.x,mouse.y,80);
+        mg.addColorStop(0,'rgba(74,158,255,0.06)');
+        mg.addColorStop(0.4,'rgba(74,158,255,0.025)');
+        mg.addColorStop(1,'transparent');
+        ctx.fillStyle = mg;
+        ctx.beginPath();
+        ctx.arc(mouse.x,mouse.y,80,0,TAU);
+        ctx.fill();
+        // Faint ring
+        ctx.beginPath();
+        ctx.arc(mouse.x,mouse.y,30,0,TAU);
+        ctx.strokeStyle = 'rgba(74,158,255,0.06)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  function drawParticles(particles){
+    // Batch by approximate color for performance
+    for(let p of particles){
+      let a = Math.min(1, p.alpha);
+      if(a < 0.01) continue;
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, TAU);
+      ctx.fillStyle = `rgba(${p.red},${p.green},${p.blue},${a.toFixed(3)})`;
+      ctx.fill();
+
+      // Additive glow for hot inner particles
+      if(p.inner && a > 0.4){
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r*3.5, 0, TAU);
+        ctx.fillStyle = `rgba(${Math.min(255,p.red+30)},${Math.min(255,p.green+20)},${p.blue},${(a*0.08).toFixed(3)})`;
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawJets(dt, bhR){
+    // Update jet particles
+    for(let i=0;i<jets.length;i++){
+      let p = jets[i];
+      p.y += p.vy*p.speed*dt*60;
+      p.x += p.vx*dt*60;
+      p.life -= dt*0.3;
+      if(p.life <= 0 || Math.abs(p.y) > H*0.42){
+        jets[i] = spawnJet();
+        continue;
+      }
+
+      let sx = cx+p.x;
+      let sy = cy-p.y;
+      let dist = Math.abs(p.y);
+      let alpha = p.life*Math.min(1,dist/40)*p.bright*0.6;
+      let t = Math.min(1,dist/(H*0.35));
+
+      // Gold at base, fading blue at extremes
+      let r = (255-t*80)|0;
+      let g = (220-t*60)|0;
+      let b = (120+t*100)|0;
+
+      ctx.beginPath();
+      ctx.arc(sx,sy,p.r*(1-t*0.4),0,TAU);
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+      ctx.fill();
+    }
+
+    // Core jet beams (thin golden columns)
+    let jPulse = 0.05+0.02*Math.sin(time*3.5);
+    // Top jet
+    let jg1 = ctx.createLinearGradient(cx,cy-H*0.42,cx,cy);
+    jg1.addColorStop(0,'transparent');
+    jg1.addColorStop(0.15,`rgba(120,140,200,${jPulse*0.3})`);
+    jg1.addColorStop(0.5,`rgba(201,168,76,${jPulse*0.6})`);
+    jg1.addColorStop(0.85,`rgba(255,230,150,${jPulse})`);
+    jg1.addColorStop(1,'transparent');
+    ctx.fillStyle = jg1;
+    ctx.beginPath();
+    ctx.moveTo(cx-2,cy);
+    ctx.lineTo(cx-10,cy-H*0.42);
+    ctx.lineTo(cx+10,cy-H*0.42);
+    ctx.lineTo(cx+2,cy);
+    ctx.fill();
+
+    // Bottom jet
+    let jg2 = ctx.createLinearGradient(cx,cy,cx,cy+H*0.42);
+    jg2.addColorStop(0,'transparent');
+    jg2.addColorStop(0.15,`rgba(255,230,150,${jPulse})`);
+    jg2.addColorStop(0.5,`rgba(201,168,76,${jPulse*0.6})`);
+    jg2.addColorStop(0.85,`rgba(120,140,200,${jPulse*0.3})`);
+    jg2.addColorStop(1,'transparent');
+    ctx.fillStyle = jg2;
+    ctx.beginPath();
+    ctx.moveTo(cx-2,cy);
+    ctx.lineTo(cx-10,cy+H*0.42);
+    ctx.lineTo(cx+10,cy+H*0.42);
+    ctx.lineTo(cx+2,cy);
+    ctx.fill();
+
+    // Jet base glow
+    let baseGlow = ctx.createRadialGradient(cx,cy-bhR,0,cx,cy-bhR,bhR*2);
+    baseGlow.addColorStop(0,`rgba(255,220,140,${jPulse*0.4})`);
+    baseGlow.addColorStop(1,'transparent');
+    ctx.fillStyle = baseGlow;
+    ctx.beginPath();
+    ctx.arc(cx,cy-bhR,bhR*2,0,TAU);
+    ctx.fill();
+
+    let baseGlow2 = ctx.createRadialGradient(cx,cy+bhR,0,cx,cy+bhR,bhR*2);
+    baseGlow2.addColorStop(0,`rgba(255,220,140,${jPulse*0.4})`);
+    baseGlow2.addColorStop(1,'transparent');
+    ctx.fillStyle = baseGlow2;
+    ctx.beginPath();
+    ctx.arc(cx,cy+bhR,bhR*2,0,TAU);
+    ctx.fill();
+  }
+
+  // --- INIT ---
+  resize();
+  initStars();
+  initDrift();
+  initDisk();
+  initJets();
+  window.addEventListener('resize',()=>{resize();initDrift();});
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
