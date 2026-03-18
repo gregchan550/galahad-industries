@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries</title>
+<meta name="description" content="Galahad Industries — Enterprise AI software. Systems initializing.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Inter:wght@300;400;600;700&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --amber: #c9a84c;
+    --amber-dim: rgba(201, 168, 76, 0.3);
+    --amber-glow: rgba(201, 168, 76, 0.4);
+    --blue: #4a9eff;
+    --blue-dim: rgba(74, 158, 255, 0.3);
+    --blue-glow: rgba(74, 158, 255, 0.3);
+    --bg: #0a0a0c;
+    --text-dim: rgba(255, 255, 255, 0.4);
+    --text-mid: rgba(255, 255, 255, 0.6);
+    --text-bright: rgba(255, 255, 255, 0.9);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* === BOOT SEQUENCE === */
+  #boot-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 40px;
+    overflow: hidden;
+  }
+
+  .boot-line {
+    font-size: clamp(10px, 1.3vw, 13px);
+    line-height: 1.5;
+    color: var(--blue);
+    opacity: 0;
+    transform: translateY(2px);
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 0.1s;
+  }
+
+  .boot-line.visible { opacity: 1; transform: translateY(0); }
+  .boot-line .prefix { color: rgba(74, 158, 255, 0.5); }
+  .boot-line .highlight { color: var(--amber); }
+  .boot-line .success { color: #4ade80; }
+  .boot-line .warn { color: var(--amber); }
+
+  #cursor-init {
+    display: inline-block;
+    width: 8px; height: 16px;
+    background: var(--blue);
+    animation: blink 0.6s step-end infinite;
+    margin-left: 2px;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .init-text {
+    font-size: clamp(13px, 1.6vw, 16px);
+    color: var(--blue);
+    display: inline;
+    letter-spacing: 2px;
+  }
+
+  #init-line {
+    margin-top: 40vh;
+    transition: margin-top 0.4s ease;
+  }
+
+  #init-line.shifted { margin-top: 20px; }
+
+  /* === GLITCH OVERLAY === */
+  #glitch-canvas {
+    position: fixed; inset: 0;
+    z-index: 110;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #glitch-canvas.active { opacity: 1; }
+
+  /* === PARTICLE CANVAS === */
+  #particle-canvas {
+    position: fixed; inset: 0;
+    z-index: 105;
+    pointer-events: none;
+  }
+
+  /* === MAIN SCENE === */
+  #main-scene {
+    position: fixed; inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    z-index: 50;
+  }
+  #main-scene.visible { opacity: 1; }
+
+  #grid-canvas {
+    position: fixed; inset: 0;
+    z-index: 1;
+  }
+
+  /* Crest */
+  .crest-container {
+    position: relative;
+    z-index: 10;
+    width: clamp(140px, 22vw, 220px);
+    height: clamp(160px, 25vw, 260px);
+    margin-bottom: 40px;
+    opacity: 0;
+  }
+  .crest-container.visible { opacity: 1; }
+
+  .crest-svg {
+    width: 100%; height: 100%;
+    filter: drop-shadow(0 0 30px var(--amber-glow));
+  }
+
+  .crest-svg.breathing {
+    animation: crest-breathe 4s ease-in-out infinite;
+  }
+
+  @keyframes crest-breathe {
+    0%, 100% { filter: drop-shadow(0 0 20px var(--amber-glow)); }
+    50% { filter: drop-shadow(0 0 40px var(--amber-glow)) drop-shadow(0 0 60px rgba(201, 168, 76, 0.15)); }
+  }
+
+  /* Crest parts — initially hidden, revealed by JS */
+  .crest-svg .crest-part { opacity: 0; }
+  .crest-svg .crest-line-draw {
+    fill: none;
+    stroke: var(--amber);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+  }
+  .crest-svg .crest-fill-part {
+    fill: var(--amber);
+    opacity: 0;
+  }
+  .crest-svg .inner-trace {
+    fill: none;
+    stroke: var(--blue);
+    stroke-width: 0.8;
+    stroke-dasharray: 500;
+    stroke-dashoffset: 500;
+  }
+
+  /* Title */
+  .title-container {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+    opacity: 0;
+  }
+  .title-container.visible { opacity: 1; }
+
+  .company-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(24px, 4.5vw, 52px);
+    letter-spacing: clamp(8px, 1.5vw, 20px);
+    color: var(--text-bright);
+    text-transform: uppercase;
+    text-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .company-name .letter {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .company-name .letter.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .tagline {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(11px, 1.3vw, 15px);
+    color: var(--blue);
+    opacity: 0;
+    margin-top: 20px;
+    letter-spacing: 3px;
+    transition: opacity 1s ease;
+  }
+  .tagline.visible { opacity: 0.8; }
+
+  .divider {
+    width: clamp(40px, 8vw, 80px);
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--amber), transparent);
+    margin: 24px auto;
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+  .divider.visible { opacity: 1; }
+
+  /* HUD notifications */
+  .hud-notification {
+    position: fixed;
+    z-index: 15;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(9px, 1vw, 11px);
+    letter-spacing: 1px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+  }
+  .hud-notification.visible { opacity: 1; }
+  .hud-notification.fade-out { opacity: 0; }
+  .hud-notification.top-left { top: 30px; left: 30px; color: var(--blue); text-align: left; }
+  .hud-notification.top-right { top: 30px; right: 30px; color: var(--blue); text-align: right; }
+  .hud-notification.bottom-left { bottom: 60px; left: 30px; color: var(--amber-dim); text-align: left; }
+  .hud-notification.bottom-right { bottom: 60px; right: 30px; color: var(--amber-dim); text-align: right; }
+
+  /* Bottom bar */
+  .bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 40px;
+    opacity: 0;
+    transition: opacity 1s ease;
+  }
+  .bottom-bar.visible { opacity: 1; }
+
+  .bottom-bar span {
+    font-size: clamp(9px, 1vw, 11px);
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--blue);
+    margin-right: 8px;
+    animation: pulse-dot 2s ease-in-out infinite;
+    vertical-align: middle;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.5; box-shadow: 0 0 4px var(--blue-glow); }
+    50% { opacity: 1; box-shadow: 0 0 12px var(--blue-glow); }
+  }
+
+  /* Scanlines & vignette */
+  .scanlines {
+    position: fixed; inset: 0;
+    z-index: 90;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+  }
+
+  .vignette {
+    position: fixed; inset: 0;
+    z-index: 80;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%);
+  }
+
+  /* Flash overlay */
+  #flash-overlay {
+    position: fixed; inset: 0;
+    z-index: 120;
+    pointer-events: none;
+    background: white;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  /* Shockwave ring — canvas-drawn now, but keep for potential CSS fallback */
+
+  @media (max-width: 600px) {
+    #boot-screen { padding: 20px; }
+    .bottom-bar { padding: 15px 20px; flex-direction: column; gap: 8px; }
+    .crest-container { margin-bottom: 24px; }
+    .hud-notification { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Boot sequence -->
+<div id="boot-screen">
+  <div id="init-line">
+    <span class="init-text" id="init-text"></span><span id="cursor-init"></span>
+  </div>
+  <div id="boot-log" style="margin-top: 12px;"></div>
+</div>
+
+<!-- Glitch overlay canvas -->
+<canvas id="glitch-canvas"></canvas>
+
+<!-- Particle transition canvas -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- Flash -->
+<div id="flash-overlay"></div>
+
+<!-- Main scene -->
+<div id="main-scene">
+  <canvas id="grid-canvas"></canvas>
+
+  <div class="crest-container" id="crest-container">
+    <svg class="crest-svg" id="crest-svg" viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">
+      <!-- Shield outline -->
+      <path class="crest-line-draw crest-part" id="crest-outer" d="M100 10 L185 50 L185 140 Q185 190 100 230 Q15 190 15 140 L15 50 Z" />
+      <!-- Inner shield border -->
+      <path class="crest-line-draw crest-part" id="crest-inner" d="M100 25 L172 60 L172 138 Q172 182 100 218 Q28 182 28 138 L28 60 Z" style="stroke-width: 0.8; opacity: 0.5;" />
+      <!-- Circuit traces (blue) -->
+      <path class="inner-trace crest-part" id="trace-left" d="M72 95 L55 120 L55 155 L75 175" />
+      <path class="inner-trace crest-part" id="trace-right" d="M128 95 L145 120 L145 155 L125 175" />
+      <line class="inner-trace crest-part" id="trace-hleft" x1="60" y1="140" x2="85" y2="140" style="stroke-width: 0.5;" />
+      <line class="inner-trace crest-part" id="trace-hright" x1="115" y1="140" x2="140" y2="140" style="stroke-width: 0.5;" />
+      <!-- Sword vertical -->
+      <line class="crest-line-draw crest-part" id="sword-blade" x1="100" y1="55" x2="100" y2="195" style="stroke-width: 1.2;" />
+      <!-- Sword crossguard -->
+      <line class="crest-line-draw crest-part" id="sword-guard" x1="72" y1="95" x2="128" y2="95" style="stroke-width: 1.2;" />
+      <!-- Nodes -->
+      <circle class="crest-fill-part crest-part" id="node-pommel" cx="100" cy="55" r="4" />
+      <circle class="crest-fill-part crest-part" cx="100" cy="75" r="2" />
+      <circle class="crest-fill-part crest-part" cx="72" cy="95" r="2.5" />
+      <circle class="crest-fill-part crest-part" cx="128" cy="95" r="2.5" />
+      <circle class="crest-fill-part crest-part" cx="75" cy="175" r="2" />
+      <circle class="crest-fill-part crest-part" cx="125" cy="175" r="2" />
+      <circle class="crest-fill-part crest-part" cx="100" cy="195" r="3" />
+      <!-- Data flow dots along sword -->
+      <circle class="crest-fill-part crest-part" id="flow1" cx="100" cy="115" r="1.5" />
+      <circle class="crest-fill-part crest-part" id="flow2" cx="100" cy="140" r="1.5" />
+      <circle class="crest-fill-part crest-part" id="flow3" cx="100" cy="165" r="1.5" />
+    </svg>
+  </div>
+
+  <div class="title-container" id="title-container">
+    <div class="company-name" id="company-name"></div>
+    <div class="divider" id="divider"></div>
+    <div class="tagline" id="tagline">Systems online.</div>
+  </div>
+
+  <div class="bottom-bar" id="bottom-bar">
+    <span><span class="status-dot"></span>All systems nominal</span>
+    <span>Est. 2026 &mdash; Brisbane, AU</span>
+  </div>
+</div>
+
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // === REFERENCES ===
+  const bootScreen = document.getElementById('boot-screen');
+  const mainScene = document.getElementById('main-scene');
+  const initText = document.getElementById('init-text');
+  const initLine = document.getElementById('init-line');
+  const cursorInit = document.getElementById('cursor-init');
+  const bootLog = document.getElementById('boot-log');
+  const glitchCanvas = document.getElementById('glitch-canvas');
+  const particleCanvas = document.getElementById('particle-canvas');
+  const gridCanvas = document.getElementById('grid-canvas');
+  const flashOverlay = document.getElementById('flash-overlay');
+  const crestContainer = document.getElementById('crest-container');
+  const crestSvg = document.getElementById('crest-svg');
+  const titleContainer = document.getElementById('title-container');
+  const companyName = document.getElementById('company-name');
+
+  const glitchCtx = glitchCanvas.getContext('2d');
+  const particleCtx = particleCanvas.getContext('2d');
+
+  let W = window.innerWidth, H = window.innerHeight;
+
+  function resizeCanvases() {
+    W = window.innerWidth; H = window.innerHeight;
+    glitchCanvas.width = particleCanvas.width = gridCanvas.width = W;
+    glitchCanvas.height = particleCanvas.height = gridCanvas.height = H;
+  }
+  resizeCanvases();
+  window.addEventListener('resize', resizeCanvases);
+
+  // === BOOT MESSAGES — fast, punchy ===
+  const bootMessages = [
+    { text: '[CORE]  Neural cores: 12 online', cls: 'success' },
+    { text: '[CORE]  Inference latency: 0.3ms', cls: 'success' },
+    { text: '[MEM]   Knowledge graph: 47M nodes', cls: 'success' },
+    { text: '[MEM]   Vector store mounted — 2.4M embeddings', cls: 'success' },
+    { text: '[NET]   Encrypted mesh network...', cls: '' },
+    { text: '[NET]   8 secure channels established', cls: 'success' },
+    { text: '[SYS]   Model weights verified — integrity OK', cls: 'success' },
+    { text: '[SYS]   Reasoning modules initialized', cls: 'success' },
+    { text: '[AUTH]  Quest parameters: LOADED', cls: 'warn' },
+    { text: '[AUTH]  Directive: Undercut legacy enterprise by 3-5x', cls: 'warn' },
+    { text: '[PLAN]  Target sectors: ERP, CRM, Supply Chain', cls: '' },
+    { text: '[PLAN]  Competitive analysis loaded', cls: 'success' },
+    { text: '[AGI]   Agentic workflows online', cls: 'success' },
+    { text: '[AGI]   Autonomous planning active', cls: 'success' },
+    { text: '[BOOT]  All subsystems nominal', cls: 'success' },
+    { text: '[BOOT]  Galahad Industries — READY', cls: 'warn' },
+  ];
+
+  // === UTILITIES ===
+  function typeText(element, text, baseSpeed, callback) {
+    let i = 0;
+    (function type() {
+      if (i < text.length) {
+        element.textContent += text[i++];
+        setTimeout(type, baseSpeed + Math.random() * 30 + (text[i-1] === '.' ? 60 : 0));
+      } else if (callback) callback();
+    })();
+  }
+
+  function addBootLine(msg, callback) {
+    const line = document.createElement('div');
+    line.className = 'boot-line';
+    const match = msg.text.match(/^(\[[A-Z]+\]\s*)(.*)/);
+    if (match) {
+      const prefix = document.createElement('span');
+      prefix.className = 'prefix';
+      prefix.textContent = match[1];
+      line.appendChild(prefix);
+      const content = document.createElement('span');
+      if (msg.cls) content.className = msg.cls;
+      content.textContent = match[2];
+      line.appendChild(content);
+    } else {
+      line.textContent = msg.text;
+    }
+    bootLog.appendChild(line);
+    requestAnimationFrame(() => line.classList.add('visible'));
+    setTimeout(callback, 30 + Math.random() * 50); // FAST — almost too fast to read
+  }
+
+  function runBootSequence(messages, index, callback) {
+    if (index >= messages.length) { setTimeout(callback, 400); return; }
+    addBootLine(messages[index], () => runBootSequence(messages, index + 1, callback));
+  }
+
+  // ============================================
+  // === PHASE 1: BOOT SEQUENCE (5-6 seconds) ===
+  // ============================================
+  setTimeout(() => {
+    typeText(initText, 'INITIALIZING...', 55, () => {
+      setTimeout(() => {
+        initLine.classList.add('shifted');
+        cursorInit.style.display = 'none';
+        setTimeout(() => {
+          runBootSequence(bootMessages, 0, () => {
+            startGlitchTransition();
+          });
+        }, 250);
+      }, 300);
+    });
+  }, 800);
+
+  // ================================================
+  // === PHASE 2: THE GLITCH TRANSITION ===
+  // ================================================
+
+  // Collect all rendered boot text character positions
+  function harvestBootCharacters() {
+    const chars = [];
+    const lines = bootLog.querySelectorAll('.boot-line');
+    const initEl = document.getElementById('init-text');
+
+    // Harvest from init text
+    const initRect = initEl.getBoundingClientRect();
+    const initTxt = initEl.textContent;
+    for (let i = 0; i < initTxt.length; i++) {
+      chars.push({
+        char: initTxt[i],
+        x: initRect.left + (i / initTxt.length) * initRect.width + Math.random() * 6,
+        y: initRect.top + initRect.height / 2,
+        color: 'rgba(74, 158, 255, 0.9)',
+        size: 13,
+      });
+    }
+
+    // Harvest from boot lines
+    lines.forEach(line => {
+      const rect = line.getBoundingClientRect();
+      const text = line.textContent;
+      const spans = line.querySelectorAll('span');
+      let col = 'rgba(74, 158, 255, 0.8)';
+      if (spans.length > 1) {
+        const cls = spans[1].className;
+        if (cls === 'success') col = 'rgba(74, 222, 128, 0.8)';
+        else if (cls === 'warn') col = 'rgba(201, 168, 76, 0.8)';
+      }
+      for (let i = 0; i < text.length; i++) {
+        if (text[i] === ' ') continue;
+        chars.push({
+          char: text[i],
+          x: rect.left + (i / text.length) * rect.width,
+          y: rect.top + rect.height * 0.7,
+          color: col,
+          size: 11,
+        });
+      }
+    });
+
+    return chars;
+  }
+
+  // Particle system for the transition
+  let particles = [];
+  let particlePhase = 'none'; // 'glitch' | 'explode' | 'swarm' | 'form-grid' | 'shockwave' | 'done'
+  let particleAnimId = null;
+  let gridTargets = [];
+  let transitionStart = 0;
+  let shockwaveTime = 0;
+  let shockwaveRadius = 0;
+  let crestAssemblyStarted = false;
+
+  class Particle {
+    constructor(char, x, y, color, size) {
+      this.char = char;
+      this.x = x; this.y = y;
+      this.ox = x; this.oy = y; // original pos
+      this.tx = 0; this.ty = 0; // target pos
+      this.vx = 0; this.vy = 0;
+      this.color = color;
+      this.size = size;
+      this.alpha = 1;
+      this.life = 1;
+      this.isGridDot = false;
+      this.settled = false;
+      this.glitchOffset = 0;
+      this.phase = 'text'; // text -> explode -> swarm -> settle
+    }
+  }
+
+  // Generate grid target positions
+  function generateGridTargets() {
+    const cellSize = Math.max(40, Math.min(60, W / 25));
+    const cols = Math.ceil(W / cellSize) + 1;
+    const rows = Math.ceil(H / cellSize) + 1;
+    const targets = [];
+    for (let c = 0; c <= cols; c++) {
+      for (let r = 0; r <= rows; r++) {
+        targets.push({ x: c * cellSize, y: r * cellSize });
+      }
+    }
+    return targets;
+  }
+
+  function startGlitchTransition() {
+    const chars = harvestBootCharacters();
+
+    // Create particles from harvested characters
+    particles = chars.map(c => new Particle(c.char, c.x, c.y, c.color, c.size));
+
+    // Generate grid targets
+    gridTargets = generateGridTargets();
+
+    // Assign each particle a grid target (or random offscreen if excess)
+    // Shuffle grid targets for organic feel
+    const shuffled = [...gridTargets].sort(() => Math.random() - 0.5);
+    particles.forEach((p, i) => {
+      if (i < shuffled.length) {
+        p.tx = shuffled[i].x;
+        p.ty = shuffled[i].y;
+        p.isGridDot = true;
+      } else {
+        p.tx = Math.random() * W;
+        p.ty = Math.random() * H;
+        p.isGridDot = true;
+      }
+    });
+
+    // Add more particles to fill the grid if we don't have enough
+    for (let i = particles.length; i < shuffled.length; i++) {
+      const p = new Particle(
+        '.',
+        Math.random() * W, Math.random() * H,
+        'rgba(74, 158, 255, 0.6)', 10
+      );
+      p.tx = shuffled[i].x;
+      p.ty = shuffled[i].y;
+      p.isGridDot = true;
+      p.alpha = 0;
+      p.phase = 'hidden';
+      particles.push(p);
+    }
+
+    // Phase timing
+    transitionStart = performance.now();
+    particlePhase = 'glitch';
+
+    // Start the glitch visual — screen flicker and character scramble
+    glitchCanvas.classList.add('active');
+
+    // Animate
+    animateTransition();
+  }
+
+  const glitchChars = '!@#$%^&*()_+-=[]{}|;:,.<>?/~`0123456789ABCDEFabcdef';
+
+  function animateTransition() {
+    const now = performance.now();
+    const elapsed = now - transitionStart;
+
+    particleCtx.clearRect(0, 0, W, H);
+    glitchCtx.clearRect(0, 0, W, H);
+
+    // === GLITCH PHASE (0 - 1200ms): characters scramble, screen flickers ===
+    if (elapsed < 1200) {
+      const intensity = Math.min(1, elapsed / 800);
+
+      // Draw glitch effect over the boot screen
+      // Random horizontal slice displacement
+      if (Math.random() < 0.3 + intensity * 0.5) {
+        const sliceY = Math.random() * H;
+        const sliceH = 5 + Math.random() * 30;
+        const offset = (Math.random() - 0.5) * 40 * intensity;
+        glitchCtx.drawImage(document.querySelector('#boot-screen'), 0, sliceY, W, sliceH, offset, sliceY, W, sliceH);
+      }
+
+      // Color flicker between green/gold
+      if (Math.random() < intensity * 0.4) {
+        const flickerColor = Math.random() > 0.5 ? 'rgba(201, 168, 76, 0.06)' : 'rgba(74, 158, 255, 0.06)';
+        glitchCtx.fillStyle = flickerColor;
+        glitchCtx.fillRect(0, 0, W, H);
+      }
+
+      // Scramble characters in boot text visually
+      particles.forEach(p => {
+        if (Math.random() < intensity * 0.6) {
+          p.glitchOffset = (Math.random() - 0.5) * 10 * intensity;
+          p.char = glitchChars[Math.floor(Math.random() * glitchChars.length)];
+        }
+        particleCtx.font = `${p.size}px 'JetBrains Mono', monospace`;
+        particleCtx.fillStyle = p.color;
+        particleCtx.globalAlpha = p.alpha;
+        particleCtx.fillText(p.char, p.x + p.glitchOffset, p.y);
+      });
+      particleCtx.globalAlpha = 1;
+
+      // At 800ms, start hiding boot screen
+      if (elapsed > 800) {
+        bootScreen.style.opacity = Math.max(0, 1 - (elapsed - 800) / 400);
+      }
+    }
+
+    // === EXPLODE PHASE (1200 - 2200ms): characters detach and become particles ===
+    else if (elapsed < 2200) {
+      bootScreen.style.display = 'none';
+      glitchCanvas.classList.remove('active');
+
+      const t = (elapsed - 1200) / 1000;
+      const cx = W / 2, cy = H / 2;
+
+      particles.forEach(p => {
+        if (p.phase === 'text' || p.phase === 'hidden') {
+          // Launch outward from current position
+          const angle = Math.atan2(p.y - cy, p.x - cx) + (Math.random() - 0.5) * 1.5;
+          const speed = 2 + Math.random() * 5;
+          p.vx = Math.cos(angle) * speed;
+          p.vy = Math.sin(angle) * speed;
+          p.phase = 'explode';
+          if (p.alpha === 0) p.alpha = 0.5; // reveal hidden particles
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+
+        // Draw as small glowing dots transitioning from characters
+        const charFade = Math.max(0, 1 - t * 3);
+        particleCtx.globalAlpha = p.alpha * 0.8;
+        if (charFade > 0.1) {
+          particleCtx.font = `${p.size * (0.5 + charFade * 0.5)}px 'JetBrains Mono', monospace`;
+          particleCtx.fillStyle = p.color;
+          particleCtx.fillText(p.char, p.x, p.y);
+        }
+        // Dot
+        const dotAlpha = Math.min(1, t * 2);
+        particleCtx.globalAlpha = p.alpha * dotAlpha * 0.8;
+        particleCtx.fillStyle = 'rgba(74, 158, 255, 0.9)';
+        particleCtx.beginPath();
+        particleCtx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+        particleCtx.fill();
+      });
+      particleCtx.globalAlpha = 1;
+    }
+
+    // === SWARM PHASE (2200 - 3500ms): chaotic then organizing ===
+    else if (elapsed < 3500) {
+      const t = (elapsed - 2200) / 1300;
+      const cx = W / 2, cy = H / 2;
+
+      particles.forEach(p => {
+        if (p.phase === 'explode') p.phase = 'swarm';
+
+        // Swirl toward center first, then toward grid targets
+        const toCenter = t < 0.3;
+        let ax, ay;
+
+        if (toCenter) {
+          // Swirl around center
+          ax = (cx - p.x) * 0.02;
+          ay = (cy - p.y) * 0.02;
+          // Add tangential force for swirl
+          const dx = p.x - cx, dy = p.y - cy;
+          ax += -dy * 0.003;
+          ay += dx * 0.003;
+        } else {
+          // Converge toward grid targets
+          const pull = 0.03 + t * 0.08;
+          ax = (p.tx - p.x) * pull;
+          ay = (p.ty - p.y) * pull;
+        }
+
+        p.vx = (p.vx + ax) * 0.92;
+        p.vy = (p.vy + ay) * 0.92;
+        p.x += p.vx;
+        p.y += p.vy;
+
+        const brightness = 0.3 + t * 0.5;
+        particleCtx.globalAlpha = Math.min(1, brightness);
+        particleCtx.fillStyle = t > 0.5 ? 'rgba(74, 158, 255, 0.7)' : p.color.replace(/[\d.]+\)/, `${brightness})`);
+        particleCtx.beginPath();
+        particleCtx.arc(p.x, p.y, 1.2 + (1 - t) * 0.8, 0, Math.PI * 2);
+        particleCtx.fill();
+      });
+      particleCtx.globalAlpha = 1;
+    }
+
+    // === SNAP TO GRID (3500 - 4200ms): particles lock into grid positions ===
+    else if (elapsed < 4200) {
+      const t = (elapsed - 3500) / 700;
+      const snap = easeOutCubic(t);
+
+      particles.forEach(p => {
+        // Lerp to target
+        p.x = p.x + (p.tx - p.x) * snap * 0.3;
+        p.y = p.y + (p.ty - p.y) * snap * 0.3;
+
+        particleCtx.globalAlpha = 0.15 + snap * 0.1;
+        particleCtx.fillStyle = 'rgba(74, 158, 255, 0.7)';
+        particleCtx.beginPath();
+        particleCtx.arc(p.x, p.y, 1, 0, Math.PI * 2);
+        particleCtx.fill();
+      });
+      particleCtx.globalAlpha = 1;
+    }
+
+    // === SHOCKWAVE + CREST ASSEMBLY (4200ms+) ===
+    else if (elapsed < 6500) {
+      // Snap all particles to final grid positions
+      if (!shockwaveTime) {
+        shockwaveTime = now;
+        particles.forEach(p => { p.x = p.tx; p.y = p.ty; p.settled = true; });
+
+        // Show main scene and grid
+        mainScene.classList.add('visible');
+        mainScene.style.opacity = '1';
+        initGrid();
+      }
+
+      const st = (now - shockwaveTime) / 1000;
+
+      // Draw settled particles (fading out as real grid takes over)
+      const particleFade = Math.max(0, 1 - st * 1.5);
+      if (particleFade > 0) {
+        particles.forEach(p => {
+          particleCtx.globalAlpha = particleFade * 0.2;
+          particleCtx.fillStyle = 'rgba(74, 158, 255, 0.6)';
+          particleCtx.beginPath();
+          particleCtx.arc(p.x, p.y, 1, 0, Math.PI * 2);
+          particleCtx.fill();
+        });
+        particleCtx.globalAlpha = 1;
+      }
+
+      // Shockwave ring
+      if (st < 1.2) {
+        shockwaveRadius = st * Math.max(W, H) * 0.8;
+        const ringAlpha = Math.max(0, 0.4 - st * 0.35);
+        particleCtx.strokeStyle = `rgba(74, 158, 255, ${ringAlpha})`;
+        particleCtx.lineWidth = 2 + (1 - st) * 4;
+        particleCtx.beginPath();
+        particleCtx.arc(W / 2, H / 2, shockwaveRadius, 0, Math.PI * 2);
+        particleCtx.stroke();
+
+        // Inner amber ring
+        if (shockwaveRadius > 20) {
+          particleCtx.strokeStyle = `rgba(201, 168, 76, ${ringAlpha * 0.5})`;
+          particleCtx.lineWidth = 1;
+          particleCtx.beginPath();
+          particleCtx.arc(W / 2, H / 2, shockwaveRadius * 0.6, 0, Math.PI * 2);
+          particleCtx.stroke();
+        }
+      }
+
+      // Crest assembly — starts at 4400ms
+      if (elapsed > 4400 && !crestAssemblyStarted) {
+        crestAssemblyStarted = true;
+        assembleCrest();
+      }
+
+    } else {
+      // Cleanup particle canvas — grid canvas has taken over
+      particleCtx.clearRect(0, 0, W, H);
+      if (particleAnimId) { cancelAnimationFrame(particleAnimId); particleAnimId = null; }
+      return;
+    }
+
+    particleAnimId = requestAnimationFrame(animateTransition);
+  }
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  // ================================================
+  // === PHASE 3: CREST ASSEMBLY & TITLE ===
+  // ================================================
+
+  function assembleCrest() {
+    crestContainer.style.opacity = '1';
+
+    // Animate crest parts sequentially with energy ripples
+    const parts = [
+      { id: 'crest-outer', type: 'draw', delay: 0, duration: 800 },
+      { id: 'crest-inner', type: 'draw', delay: 300, duration: 600 },
+      { id: 'trace-left', type: 'draw', delay: 600, duration: 500 },
+      { id: 'trace-right', type: 'draw', delay: 700, duration: 500 },
+      { id: 'trace-hleft', type: 'draw', delay: 900, duration: 300 },
+      { id: 'trace-hright', type: 'draw', delay: 950, duration: 300 },
+      { id: 'sword-guard', type: 'draw', delay: 1000, duration: 400 },
+      { id: 'sword-blade', type: 'draw', delay: 1100, duration: 600 },
+    ];
+
+    parts.forEach(part => {
+      const el = document.getElementById(part.id);
+      if (!el) return;
+
+      setTimeout(() => {
+        el.style.opacity = '1';
+        el.style.transition = `stroke-dashoffset ${part.duration}ms ease`;
+        el.style.strokeDashoffset = '0';
+
+        // Energy ripple on the crest container
+        pulseGlow();
+      }, part.delay);
+    });
+
+    // Fade in fill nodes
+    const fills = crestSvg.querySelectorAll('.crest-fill-part');
+    fills.forEach((f, i) => {
+      setTimeout(() => {
+        f.style.transition = 'opacity 0.3s ease';
+        f.style.opacity = '0.6';
+      }, 1200 + i * 80);
+    });
+
+    // Sword drops in — special animation
+    setTimeout(() => {
+      // Final flash
+      flashOverlay.style.opacity = '0.15';
+      setTimeout(() => { flashOverlay.style.opacity = '0'; }, 200);
+
+      // Start breathing
+      crestSvg.classList.add('breathing');
+
+      // Setup data flow dots animation
+      ['flow1', 'flow2', 'flow3'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.style.animation = `data-flow 3s ease-in-out ${i * 0.3}s infinite`;
+        }
+      });
+    }, 1800);
+
+    // Title materializes
+    setTimeout(materializeTitle, 2000);
+
+    // Bottom bar and HUD
+    setTimeout(() => {
+      document.getElementById('bottom-bar').classList.add('visible');
+      startHudNotifications();
+    }, 3200);
+  }
+
+  let glowCount = 0;
+  function pulseGlow() {
+    glowCount++;
+    crestSvg.style.filter = `drop-shadow(0 0 ${40 + glowCount * 5}px var(--amber-glow))`;
+    setTimeout(() => {
+      crestSvg.style.filter = 'drop-shadow(0 0 30px var(--amber-glow))';
+    }, 200);
+  }
+
+  function materializeTitle() {
+    titleContainer.style.opacity = '1';
+    const text = 'GALAHAD INDUSTRIES';
+    // Create letter spans
+    text.split('').forEach((ch, i) => {
+      const span = document.createElement('span');
+      span.className = 'letter';
+      span.textContent = ch === ' ' ? '\u00A0' : ch;
+      companyName.appendChild(span);
+    });
+
+    // Animate letters in from edges with data stream effect
+    const letters = companyName.querySelectorAll('.letter');
+    letters.forEach((letter, i) => {
+      // Stagger from both edges toward center
+      const center = letters.length / 2;
+      const dist = Math.abs(i - center);
+      const delay = (letters.length / 2 - dist) * 60 + 100;
+
+      setTimeout(() => {
+        letter.classList.add('visible');
+      }, delay);
+    });
+
+    // Divider and tagline
+    setTimeout(() => { document.getElementById('divider').classList.add('visible'); }, 800);
+    setTimeout(() => {
+      const tagline = document.getElementById('tagline');
+      tagline.classList.add('visible');
+      // Gentle pulse
+      tagline.style.animation = 'none';
+      requestAnimationFrame(() => {
+        tagline.style.animation = 'tagline-pulse 3s ease-in-out infinite';
+      });
+    }, 1200);
+  }
+
+  // === HUD NOTIFICATIONS ===
+  const hudMessages = [
+    { text: '> Scanning sector 7...', pos: 'top-left' },
+    { text: '> Anomaly detected: legacy ERP', pos: 'top-right' },
+    { text: '> Deploying countermeasures...', pos: 'bottom-left' },
+    { text: '> Market analysis: 94.2% confidence', pos: 'top-left' },
+    { text: '> Neural pathway optimization: +12%', pos: 'bottom-right' },
+    { text: '> Supply chain vulnerability mapped', pos: 'top-right' },
+    { text: '> Agent swarm: 6 active', pos: 'bottom-left' },
+    { text: '> Knowledge ingestion: 847 docs/sec', pos: 'top-left' },
+    { text: '> Competitive moat: reinforcing...', pos: 'bottom-right' },
+    { text: '> Target acquired: vertical SaaS', pos: 'top-right' },
+    { text: '> Inference pipeline: optimal', pos: 'bottom-left' },
+    { text: '> Quest objective: within range', pos: 'top-left' },
+  ];
+  let hudIndex = 0;
+
+  function startHudNotifications() {
+    function showNext() {
+      const msg = hudMessages[hudIndex % hudMessages.length];
+      hudIndex++;
+
+      const el = document.createElement('div');
+      el.className = `hud-notification ${msg.pos}`;
+      el.textContent = msg.text;
+      document.body.appendChild(el);
+
+      requestAnimationFrame(() => el.classList.add('visible'));
+
+      setTimeout(() => {
+        el.classList.add('fade-out');
+        setTimeout(() => el.remove(), 1000);
+      }, 3000 + Math.random() * 2000);
+
+      setTimeout(showNext, 4000 + Math.random() * 6000);
+    }
+    setTimeout(showNext, 2000);
+  }
+
+  // ================================================
+  // === GRID BACKGROUND (from original) ===
+  // ================================================
+  let gridActive = false;
+  let mouseX = -1, mouseY = -1;
+
+  function initGrid() {
+    if (gridActive) return;
+    gridActive = true;
+
+    const ctx = gridCanvas.getContext('2d');
+    let cellSize, cols, rows;
+    const pulses = [];
+    const maxPulses = 12;
+
+    function calcGrid() {
+      cellSize = Math.max(40, Math.min(60, W / 25));
+      cols = Math.ceil(W / cellSize) + 1;
+      rows = Math.ceil(H / cellSize) + 1;
+    }
+    calcGrid();
+
+    window.addEventListener('resize', () => {
+      calcGrid();
+    });
+
+    // Mouse interaction
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    });
+
+    class GridPulse {
+      constructor() { this.reset(); }
+      reset() {
+        const col = Math.floor(Math.random() * cols);
+        const row = Math.floor(Math.random() * rows);
+        this.x = col * cellSize;
+        this.y = row * cellSize;
+        this.horizontal = Math.random() > 0.5;
+        this.speed = 1 + Math.random() * 2.5;
+        this.direction = Math.random() > 0.5 ? 1 : -1;
+        this.length = 40 + Math.random() * 80;
+        this.alpha = 0.15 + Math.random() * 0.2;
+        this.life = 0;
+        this.maxLife = 200 + Math.random() * 300;
+        // Some pulses are amber
+        this.isAmber = Math.random() < 0.15;
+      }
+      update() {
+        if (this.horizontal) this.x += this.speed * this.direction;
+        else this.y += this.speed * this.direction;
+        this.life++;
+        if (this.life > this.maxLife || this.x < -100 || this.x > W + 100 || this.y < -100 || this.y > H + 100) {
+          this.reset();
+        }
+      }
+      draw(ctx) {
+        const fade = Math.min(1, this.life / 30) * Math.min(1, (this.maxLife - this.life) / 30);
+        const a = this.alpha * fade;
+        const r = this.isAmber ? 201 : 74;
+        const g = this.isAmber ? 168 : 158;
+        const b = this.isAmber ? 76 : 255;
+
+        if (this.horizontal) {
+          const grad = ctx.createLinearGradient(this.x - this.length, this.y, this.x, this.y);
+          grad.addColorStop(0, `rgba(${r},${g},${b}, 0)`);
+          grad.addColorStop(0.5, `rgba(${r},${g},${b}, ${a})`);
+          grad.addColorStop(1, `rgba(${r},${g},${b}, 0)`);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(this.x - this.length, this.y);
+          ctx.lineTo(this.x, this.y);
+          ctx.stroke();
+        } else {
+          const grad = ctx.createLinearGradient(this.x, this.y - this.length, this.x, this.y);
+          grad.addColorStop(0, `rgba(${r},${g},${b}, 0)`);
+          grad.addColorStop(0.5, `rgba(${r},${g},${b}, ${a})`);
+          grad.addColorStop(1, `rgba(${r},${g},${b}, 0)`);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(this.x, this.y - this.length);
+          ctx.lineTo(this.x, this.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    for (let i = 0; i < maxPulses; i++) {
+      const p = new GridPulse();
+      p.life = Math.floor(Math.random() * p.maxLife);
+      pulses.push(p);
+    }
+
+    // Floating particles along grid lines
+    const floaters = [];
+    for (let i = 0; i < 20; i++) {
+      floaters.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        size: 0.5 + Math.random() * 1.5,
+        alpha: 0.1 + Math.random() * 0.2,
+      });
+    }
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, W, H);
+
+      // Grid lines
+      ctx.strokeStyle = 'rgba(74, 158, 255, 0.04)';
+      ctx.lineWidth = 0.5;
+      for (let x = 0; x <= cols; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * cellSize, 0);
+        ctx.lineTo(x * cellSize, H);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= rows; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * cellSize);
+        ctx.lineTo(W, y * cellSize);
+        ctx.stroke();
+      }
+
+      // Grid intersections
+      for (let x = 0; x <= cols; x++) {
+        for (let y = 0; y <= rows; y++) {
+          const gx = x * cellSize, gy = y * cellSize;
+          let dotAlpha = 0.06;
+
+          // Mouse proximity glow
+          if (mouseX >= 0) {
+            const dist = Math.hypot(gx - mouseX, gy - mouseY);
+            if (dist < 120) {
+              dotAlpha = 0.06 + (1 - dist / 120) * 0.4;
+              // Draw connecting line to nearby lit dots
+              if (dotAlpha > 0.15 && Math.random() < 0.02) {
+                ctx.strokeStyle = `rgba(74, 158, 255, ${dotAlpha * 0.3})`;
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                ctx.moveTo(gx, gy);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.stroke();
+              }
+            }
+          }
+
+          ctx.fillStyle = `rgba(74, 158, 255, ${dotAlpha})`;
+          ctx.beginPath();
+          ctx.arc(gx, gy, dotAlpha > 0.15 ? 2 : 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Pulses
+      for (const p of pulses) {
+        p.update();
+        p.draw(ctx);
+      }
+
+      // Floating particles
+      floaters.forEach(f => {
+        f.x += f.vx;
+        f.y += f.vy;
+        if (f.x < 0 || f.x > W) f.vx *= -1;
+        if (f.y < 0 || f.y > H) f.vy *= -1;
+
+        ctx.fillStyle = `rgba(74, 158, 255, ${f.alpha})`;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      requestAnimationFrame(drawGrid);
+    }
+
+    drawGrid();
+  }
+
+  // === DATA FLOW KEYFRAMES (for SVG) ===
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = `
+    @keyframes data-flow {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.9; }
+    }
+    @keyframes tagline-pulse {
+      0%, 100% { opacity: 0.7; text-shadow: 0 0 10px rgba(74, 158, 255, 0); }
+      50% { opacity: 0.9; text-shadow: 0 0 10px rgba(74, 158, 255, 0.2); }
+    }
+  `;
+  document.head.appendChild(styleSheet);
+
+})();
+</script>
+</body>
+</html>
