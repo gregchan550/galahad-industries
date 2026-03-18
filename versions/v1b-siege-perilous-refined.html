@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galahad Industries</title>
+<meta name="description" content="Enterprise AI software. The seat is taken.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@200;300;400&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e8;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Inter', -apple-system, sans-serif;
+  }
+
+  canvas#scene {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  canvas#textSampler {
+    display: none;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 12vh;
+    pointer-events: none;
+  }
+
+  .tagline {
+    font-family: 'Cormorant Garamond', 'Georgia', serif;
+    font-weight: 300;
+    font-size: clamp(0.9rem, 2vw, 1.3rem);
+    letter-spacing: 0.3em;
+    color: rgba(201, 168, 76, 0.6);
+    opacity: 0;
+    transform: translateY(15px);
+    transition: opacity 2.5s ease, transform 2.5s ease;
+    text-align: center;
+    font-style: italic;
+  }
+
+  .tagline.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .contact {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    font-size: clamp(0.6rem, 1vw, 0.75rem);
+    letter-spacing: 0.15em;
+    color: rgba(255, 255, 255, 0.18);
+    margin-top: 1.5rem;
+    opacity: 0;
+    transition: opacity 3s ease 0.6s;
+    pointer-events: auto;
+  }
+
+  .contact.visible { opacity: 1; }
+
+  .contact a {
+    color: rgba(201, 168, 76, 0.35);
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+
+  .contact a:hover { color: rgba(201, 168, 76, 0.8); }
+
+  .vignette {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 5;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.65) 100%);
+  }
+
+  .scan-line {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 6;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.012) 2px,
+      rgba(0, 0, 0, 0.012) 4px
+    );
+  }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+<canvas id="textSampler"></canvas>
+<div class="vignette"></div>
+<div class="scan-line"></div>
+
+<div class="overlay">
+  <div class="tagline" id="tagline">The seat is taken.</div>
+  <div class="contact" id="contact">Inquiries &mdash; <a href="mailto:greg@galahad.industries">greg@galahad.industries</a></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ============================================================
+// CONFIG
+// ============================================================
+const PARTICLE_COUNT = 2400;
+const SWORD_PARTICLE_COUNT = 120;
+const BG_PARTICLE_COUNT = 400;
+const TOTAL_PARTICLES = PARTICLE_COUNT + SWORD_PARTICLE_COUNT + BG_PARTICLE_COUNT;
+const CONNECTION_DISTANCE = 0.14;
+const GOLD = new THREE.Color(0xc9a84c);
+const BRIGHT_GOLD = new THREE.Color(0xffe08a);
+const DIM_GOLD = new THREE.Color(0x3d2f12);
+const DARK = new THREE.Color(0x1a1510);
+const WHITE = new THREE.Color(0xffffff);
+
+// ============================================================
+// PHASES
+// ============================================================
+const PHASE = {
+  DRIFT: 0,
+  CONVERGE: 1,
+  THRONE: 2,
+  SCATTER: 3,
+  DARKNESS: 4,
+  RUSH_BACK: 5,
+  SWORD_DROP: 6,
+  TEXT_HOLD: 7,
+  AMBIENT: 8
+};
+let phase = PHASE.DRIFT;
+let phaseTime = 0;
+const PHASE_DURATIONS = {
+  [PHASE.DRIFT]: 2.5,
+  [PHASE.CONVERGE]: 3.0,
+  [PHASE.THRONE]: 2.5,
+  [PHASE.SCATTER]: 1.2,
+  [PHASE.DARKNESS]: 0.5,
+  [PHASE.RUSH_BACK]: 2.0,
+  [PHASE.SWORD_DROP]: 1.0,
+  [PHASE.TEXT_HOLD]: 2.0,
+};
+
+// ============================================================
+// SCENE SETUP
+// ============================================================
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0a0a0a, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.z = 3.5;
+
+// ============================================================
+// MOUSE
+// ============================================================
+const mouse = new THREE.Vector2(0, 0);
+const mouseWorld = new THREE.Vector3(999, 999, 0);
+let mouseActive = false;
+
+window.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  mouseWorld.set(mouse.x * 3.0, mouse.y * 2.0, 0);
+  mouseActive = true;
+});
+window.addEventListener('touchmove', (e) => {
+  const t = e.touches[0];
+  mouse.x = (t.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(t.clientY / window.innerHeight) * 2 + 1;
+  mouseWorld.set(mouse.x * 3.0, mouse.y * 2.0, 0);
+  mouseActive = true;
+}, { passive: true });
+
+// ============================================================
+// TEXT SAMPLING — Generate particle positions from canvas text
+// ============================================================
+// Returns { positions: Vector3[], bounds: { minX, maxX, minY, maxY } in world coords }
+function sampleTextPositions(text, count, fontSize, yOffset, trackingPx) {
+  const sampler = document.getElementById('textSampler');
+  const ctx = sampler.getContext('2d');
+
+  const scale = 2;
+  const cw = 1600 * scale;
+  const canvasH = 300 * scale;
+  sampler.width = cw;
+  sampler.height = canvasH;
+
+  ctx.clearRect(0, 0, cw, canvasH);
+  ctx.fillStyle = '#ffffff';
+  const fontStr = `600 ${fontSize * scale}px "Cormorant Garamond", Georgia, serif`;
+  ctx.font = fontStr;
+  ctx.textBaseline = 'middle';
+
+  // Manual letter-spacing for cross-browser reliability
+  const tracking = (trackingPx || fontSize * 0.35) * scale;
+  let totalW = 0;
+  for (const letter of text) {
+    totalW += ctx.measureText(letter).width + tracking;
+  }
+  totalW -= tracking; // No trailing
+
+  let cx = (cw - totalW) / 2;
+  for (const letter of text) {
+    ctx.fillText(letter, cx, sampler.height / 2);
+    cx += ctx.measureText(letter).width + tracking;
+  }
+
+  const imageData = ctx.getImageData(0, 0, cw, sampler.height);
+  const pixels = imageData.data;
+
+  const candidates = [];
+  const step = 2;
+  for (let y = 0; y < sampler.height; y += step) {
+    for (let x = 0; x < cw; x += step) {
+      const idx = (y * cw + x) * 4;
+      if (pixels[idx] > 100) {
+        candidates.push({ x, y });
+      }
+    }
+  }
+
+  const positions = [];
+  const worldWidth = 5.2;
+  const aspect = cw / sampler.height;
+  const worldHeight = worldWidth / aspect;
+
+  // Shuffle candidates for better distribution
+  for (let k = candidates.length - 1; k > 0; k--) {
+    const j = Math.floor(Math.random() * (k + 1));
+    [candidates[k], candidates[j]] = [candidates[j], candidates[k]];
+  }
+
+  const usedCount = Math.min(count, candidates.length);
+  for (let i = 0; i < usedCount; i++) {
+    const p = candidates[i];
+    const wx = ((p.x / cw) - 0.5) * worldWidth;
+    const wy = -((p.y / sampler.height) - 0.5) * worldHeight + (yOffset || 0);
+    const wz = (Math.random() - 0.5) * 0.05;
+    positions.push(new THREE.Vector3(wx, wy, wz));
+  }
+
+  while (positions.length < count) {
+    const src = positions[Math.floor(Math.random() * positions.length)];
+    positions.push(new THREE.Vector3(
+      src.x + (Math.random() - 0.5) * 0.015,
+      src.y + (Math.random() - 0.5) * 0.015,
+      (Math.random() - 0.5) * 0.05
+    ));
+  }
+
+  return positions;
+}
+
+// Find the "I" in INDUSTRIES by rendering just that letter and computing its center
+function findLetterCenter(fullText, letterIndex, fontSize, yOffset, trackingPx) {
+  const sampler = document.getElementById('textSampler');
+  const ctx = sampler.getContext('2d');
+  const scale = 2;
+  const cw = 1600 * scale;
+  sampler.width = cw;
+  sampler.height = 300 * scale;
+
+  const fontStr = `600 ${fontSize * scale}px "Cormorant Garamond", Georgia, serif`;
+  ctx.font = fontStr;
+  ctx.textBaseline = 'middle';
+
+  const tracking = (trackingPx || fontSize * 0.35) * scale;
+  let totalW = 0;
+  for (const ch of fullText) {
+    totalW += ctx.measureText(ch).width + tracking;
+  }
+  totalW -= tracking;
+
+  // Find the pixel x-center of the target letter
+  let cx = (cw - totalW) / 2;
+  for (let k = 0; k < letterIndex; k++) {
+    cx += ctx.measureText(fullText[k]).width + tracking;
+  }
+  const letterW = ctx.measureText(fullText[letterIndex]).width;
+  const letterCenterPx = cx + letterW / 2;
+
+  const worldWidth = 5.2;
+  const wx = ((letterCenterPx / cw) - 0.5) * worldWidth;
+  return wx;
+}
+
+// ============================================================
+// THRONE GEOMETRY
+// ============================================================
+function generateThronePoints(count) {
+  const points = [];
+  const w = 0.55, h = 0.9;
+  const seatY = -0.15;
+
+  function line(x1, y1, x2, y2, n, scatter = 0.015) {
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      points.push(new THREE.Vector3(
+        THREE.MathUtils.lerp(x1, x2, t) + (Math.random() - 0.5) * scatter,
+        THREE.MathUtils.lerp(y1, y2, t) + (Math.random() - 0.5) * scatter,
+        (Math.random() - 0.5) * 0.08
+      ));
+    }
+  }
+
+  function arc(cx, cy, r, startAngle, endAngle, n, scatter = 0.015) {
+    for (let i = 0; i < n; i++) {
+      const t = i / n;
+      const a = THREE.MathUtils.lerp(startAngle, endAngle, t);
+      points.push(new THREE.Vector3(
+        cx + Math.cos(a) * r + (Math.random() - 0.5) * scatter,
+        cy + Math.sin(a) * r + (Math.random() - 0.5) * scatter,
+        (Math.random() - 0.5) * 0.08
+      ));
+    }
+  }
+
+  const density = count / 600;
+
+  // Tall back - pointed Gothic arch
+  arc(0, h * 0.45, w * 0.5, Math.PI * 0.15, Math.PI * 0.85, Math.floor(80 * density), 0.02);
+  // Peak finial
+  line(0, h * 0.88, 0, h * 1.05, Math.floor(25 * density), 0.008);
+  // Small cross at top
+  line(-0.04, h * 1.02, 0.04, h * 1.02, Math.floor(10 * density), 0.005);
+
+  // Back vertical sides
+  line(-w * 0.48, seatY + 0.1, -w * 0.38, h * 0.75, Math.floor(60 * density));
+  line(w * 0.48, seatY + 0.1, w * 0.38, h * 0.75, Math.floor(60 * density));
+
+  // Inner tracery
+  arc(0, h * 0.35, w * 0.28, Math.PI * 0.2, Math.PI * 0.8, Math.floor(40 * density), 0.01);
+  line(-w * 0.12, seatY + 0.15, -w * 0.08, h * 0.55, Math.floor(30 * density), 0.008);
+  line(w * 0.12, seatY + 0.15, w * 0.08, h * 0.55, Math.floor(30 * density), 0.008);
+  line(0, seatY + 0.08, 0, h * 0.62, Math.floor(35 * density), 0.006);
+
+  // Armrests
+  line(-w * 0.48, seatY, -w * 0.72, seatY + 0.08, Math.floor(30 * density));
+  line(w * 0.48, seatY, w * 0.72, seatY + 0.08, Math.floor(30 * density));
+  for (let i = 0; i < Math.floor(15 * density); i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * 0.03;
+    points.push(new THREE.Vector3(-w * 0.72 + Math.cos(a) * r, seatY + 0.08 + Math.sin(a) * r, (Math.random() - 0.5) * 0.04));
+    points.push(new THREE.Vector3(w * 0.72 + Math.cos(a) * r, seatY + 0.08 + Math.sin(a) * r, (Math.random() - 0.5) * 0.04));
+  }
+
+  // Seat
+  line(-w * 0.48, seatY, w * 0.48, seatY, Math.floor(40 * density));
+
+  // Front legs
+  line(-w * 0.48, seatY, -w * 0.55, -h * 0.7, Math.floor(45 * density));
+  line(w * 0.48, seatY, w * 0.55, -h * 0.7, Math.floor(45 * density));
+  line(-w * 0.42, seatY, -w * 0.45, -h * 0.68, Math.floor(35 * density));
+  line(w * 0.42, seatY, w * 0.45, -h * 0.68, Math.floor(35 * density));
+
+  // Leg crossbar
+  line(-w * 0.5, -h * 0.35, w * 0.5, -h * 0.35, Math.floor(30 * density));
+
+  // Base platform
+  line(-w * 0.65, -h * 0.7, w * 0.65, -h * 0.7, Math.floor(35 * density));
+  line(-w * 0.65, -h * 0.73, w * 0.65, -h * 0.73, Math.floor(25 * density));
+
+  // Ambient aura
+  for (let i = 0; i < Math.floor(80 * density); i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 0.6 + Math.random() * 0.5;
+    const yOff = (Math.random() - 0.3) * 1.2;
+    points.push(new THREE.Vector3(
+      Math.cos(angle) * radius * 0.7, yOff,
+      Math.sin(angle) * 0.15 + (Math.random() - 0.5) * 0.1
+    ));
+  }
+
+  while (points.length < count) {
+    const src = points[Math.floor(Math.random() * points.length)];
+    points.push(new THREE.Vector3(
+      src.x + (Math.random() - 0.5) * 0.03,
+      src.y + (Math.random() - 0.5) * 0.03,
+      src.z + (Math.random() - 0.5) * 0.03
+    ));
+  }
+  return points.slice(0, count);
+}
+
+// ============================================================
+// GENERATE ALL TARGET POSITIONS
+// ============================================================
+const throneTargets = generateThronePoints(PARTICLE_COUNT);
+
+// Text targets — "GALAHAD" on top, "INDUSTRIES" below
+const galahadTrack = 32; // tracking in px
+const industriesTrack = 21;
+const galahadTargets = sampleTextPositions('GALAHAD', Math.floor(PARTICLE_COUNT * 0.45), 90, 0.22, galahadTrack);
+const industriesTargets = sampleTextPositions('INDUSTRIES', Math.floor(PARTICLE_COUNT * 0.55), 60, -0.25, industriesTrack);
+const textTargets = [...galahadTargets, ...industriesTargets].slice(0, PARTICLE_COUNT);
+
+while (textTargets.length < PARTICLE_COUNT) {
+  const src = textTargets[Math.floor(Math.random() * textTargets.length)];
+  textTargets.push(new THREE.Vector3(
+    src.x + (Math.random() - 0.5) * 0.015,
+    src.y + (Math.random() - 0.5) * 0.015,
+    (Math.random() - 0.5) * 0.05
+  ));
+}
+
+// Find the "I" in INDUSTRIES (first letter, index 0)
+const swordTargetX = findLetterCenter('INDUSTRIES', 0, 60, -0.25, industriesTrack);
+const swordTargetY = -0.25; // Same as INDUSTRIES yOffset
+const swordStartY = 3.0; // Above screen
+
+// Scatter targets — particles fly outward
+const scatterTargets = [];
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 3 + Math.random() * 4;
+  scatterTargets.push(new THREE.Vector3(
+    Math.cos(angle) * dist,
+    Math.sin(angle) * dist,
+    (Math.random() - 0.5) * 3
+  ));
+}
+
+// ============================================================
+// PARTICLE SYSTEM
+// ============================================================
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(TOTAL_PARTICLES * 3);
+const colors = new Float32Array(TOTAL_PARTICLES * 3);
+const sizes = new Float32Array(TOTAL_PARTICLES);
+const velocities = new Float32Array(TOTAL_PARTICLES * 3);
+const phaseOffsets = new Float32Array(TOTAL_PARTICLES);
+
+// Initialize main particles
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+  const i3 = i * 3;
+  positions[i3] = (Math.random() - 0.5) * 6;
+  positions[i3 + 1] = (Math.random() - 0.5) * 4;
+  positions[i3 + 2] = (Math.random() - 0.5) * 2;
+  velocities[i3] = (Math.random() - 0.5) * 0.002;
+  velocities[i3 + 1] = (Math.random() - 0.5) * 0.002;
+  velocities[i3 + 2] = (Math.random() - 0.5) * 0.001;
+  phaseOffsets[i] = Math.random() * Math.PI * 2;
+  const c = DIM_GOLD.clone().lerp(DARK, Math.random() * 0.7);
+  colors[i3] = c.r; colors[i3 + 1] = c.g; colors[i3 + 2] = c.b;
+  sizes[i] = 1.5 + Math.random() * 2;
+}
+
+// Initialize sword particles — hidden above screen
+for (let i = PARTICLE_COUNT; i < PARTICLE_COUNT + SWORD_PARTICLE_COUNT; i++) {
+  const i3 = i * 3;
+  const t = (i - PARTICLE_COUNT) / SWORD_PARTICLE_COUNT;
+  positions[i3] = swordTargetX + (Math.random() - 0.5) * 0.02;
+  positions[i3 + 1] = swordStartY + t * 1.5 + (Math.random() - 0.5) * 0.01;
+  positions[i3 + 2] = (Math.random() - 0.5) * 0.02;
+  velocities[i3] = 0; velocities[i3 + 1] = 0; velocities[i3 + 2] = 0;
+  phaseOffsets[i] = Math.random() * Math.PI * 2;
+  colors[i3] = 0; colors[i3 + 1] = 0; colors[i3 + 2] = 0;
+  sizes[i] = 0;
+}
+
+// Initialize background particles — spread wide, dim
+for (let i = PARTICLE_COUNT + SWORD_PARTICLE_COUNT; i < TOTAL_PARTICLES; i++) {
+  const i3 = i * 3;
+  positions[i3] = (Math.random() - 0.5) * 8;
+  positions[i3 + 1] = (Math.random() - 0.5) * 6;
+  positions[i3 + 2] = (Math.random() - 0.5) * 3 - 1;
+  velocities[i3] = (Math.random() - 0.5) * 0.0005;
+  velocities[i3 + 1] = (Math.random() - 0.5) * 0.0005;
+  velocities[i3 + 2] = (Math.random() - 0.5) * 0.0002;
+  phaseOffsets[i] = Math.random() * Math.PI * 2;
+  const c = DIM_GOLD.clone().lerp(DARK, 0.6 + Math.random() * 0.4);
+  colors[i3] = c.r; colors[i3 + 1] = c.g; colors[i3 + 2] = c.b;
+  sizes[i] = 0.6 + Math.random() * 0.8;
+}
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+const particleMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uPixelRatio: { value: renderer.getPixelRatio() },
+    uShockwave: { value: 0 },
+    uShockCenter: { value: new THREE.Vector2(0, 0) },
+    uShockRadius: { value: 0 },
+  },
+  vertexShader: `
+    attribute float size;
+    varying vec3 vColor;
+    varying float vAlpha;
+    uniform float uTime;
+    uniform float uPixelRatio;
+    uniform float uShockwave;
+    uniform vec2 uShockCenter;
+    uniform float uShockRadius;
+
+    void main() {
+      vColor = color;
+      vAlpha = 1.0;
+
+      vec3 pos = position;
+
+      // Shockwave displacement
+      if (uShockwave > 0.0) {
+        vec2 delta = pos.xy - uShockCenter;
+        float dist = length(delta);
+        float ring = abs(dist - uShockRadius);
+        if (ring < 0.3) {
+          float strength = (1.0 - ring / 0.3) * uShockwave * 0.15;
+          pos.xy += normalize(delta) * strength;
+        }
+      }
+
+      vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
+      gl_PointSize = size * uPixelRatio * (2.5 / -mvPos.z);
+      gl_Position = projectionMatrix * mvPos;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vColor;
+    varying float vAlpha;
+    void main() {
+      float d = length(gl_PointCoord - 0.5);
+      if (d > 0.5) discard;
+      float alpha = smoothstep(0.5, 0.05, d);
+      alpha *= alpha;
+      gl_FragColor = vec4(vColor, alpha * vAlpha);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  vertexColors: true,
+});
+
+const particles = new THREE.Points(geometry, particleMaterial);
+scene.add(particles);
+
+// ============================================================
+// CONNECTION LINES (Neural network)
+// ============================================================
+const MAX_LINES = 8000;
+const lineGeo = new THREE.BufferGeometry();
+const linePositions = new Float32Array(MAX_LINES * 6);
+const lineColors = new Float32Array(MAX_LINES * 6);
+lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+lineGeo.setAttribute('color', new THREE.BufferAttribute(lineColors, 3));
+lineGeo.setDrawRange(0, 0);
+
+const lineMaterial = new THREE.LineBasicMaterial({
+  vertexColors: true,
+  transparent: true,
+  opacity: 0.7,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+
+const lineSegments = new THREE.LineSegments(lineGeo, lineMaterial);
+scene.add(lineSegments);
+
+// ============================================================
+// AMBIENT GLOW PLANE
+// ============================================================
+const glowGeo = new THREE.PlaneGeometry(10, 10);
+const glowMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uIntensity: { value: 0 },
+    uFlash: { value: 0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    uniform float uIntensity;
+    uniform float uFlash;
+    varying vec2 vUv;
+    void main() {
+      vec2 center = vec2(0.5, 0.52);
+      float d = distance(vUv, center);
+      float glow = exp(-d * 3.0) * uIntensity * 0.12;
+      glow += exp(-d * 8.0) * uIntensity * 0.08;
+      // Flash on sword impact
+      glow += exp(-d * 2.0) * uFlash * 0.3;
+      vec3 col = vec3(0.79, 0.66, 0.30) * glow;
+      // Add white flash component
+      col += vec3(1.0) * uFlash * exp(-d * 4.0) * 0.15;
+      gl_FragColor = vec4(col, glow);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+});
+const glowPlane = new THREE.Mesh(glowGeo, glowMat);
+glowPlane.position.z = -0.5;
+scene.add(glowPlane);
+
+// ============================================================
+// STATE
+// ============================================================
+const clock = new THREE.Clock();
+let elapsed = 0;
+let connectionDist = 0;
+let connectionIntensity = 0;
+let shockwaveTime = -1;
+let swordProgress = 0; // 0 = above, 1 = landed
+let swordLanded = false;
+let textRevealed = false;
+let ambientConnectionBase = 0; // Grows during ambient phase
+
+function setPhase(newPhase) {
+  phase = newPhase;
+  phaseTime = 0;
+}
+
+// ============================================================
+// CONNECTION UPDATE — Spatial hash grid
+// ============================================================
+function updateConnections(customDist, customIntensity, particleRange) {
+  const pos = geometry.attributes.position.array;
+  let lineIdx = 0;
+  const dist = customDist || connectionDist;
+  const intensity = customIntensity || connectionIntensity;
+  const dist2 = dist * dist;
+  const range = particleRange || TOTAL_PARTICLES;
+
+  if (dist < 0.01) {
+    lineGeo.setDrawRange(0, 0);
+    return;
+  }
+
+  const cellSize = dist;
+  const cells = new Map();
+
+  for (let i = 0; i < range; i++) {
+    const x = pos[i * 3], y = pos[i * 3 + 1];
+    const cx = Math.floor(x / cellSize), cy = Math.floor(y / cellSize);
+    const key = cx + ',' + cy;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push(i);
+  }
+
+  for (const [key, indices] of cells) {
+    const [cx, cy] = key.split(',').map(Number);
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const nKey = (cx + dx) + ',' + (cy + dy);
+        const neighbors = cells.get(nKey);
+        if (!neighbors) continue;
+
+        for (const i of indices) {
+          for (const j of neighbors) {
+            if (j <= i) continue;
+            if (lineIdx >= MAX_LINES) break;
+
+            const ix = i * 3, jx = j * 3;
+            const ddx = pos[ix] - pos[jx];
+            const ddy = pos[ix + 1] - pos[jx + 1];
+            const ddz = pos[ix + 2] - pos[jx + 2];
+            const d2 = ddx * ddx + ddy * ddy + ddz * ddz;
+
+            if (d2 < dist2) {
+              const alpha = 1 - Math.sqrt(d2) / dist;
+              // Flicker effect for neural network feel
+              const flicker = phase >= PHASE.TEXT_HOLD
+                ? 0.5 + 0.5 * Math.sin(elapsed * 3 + i * 0.7 + j * 0.3)
+                : 1.0;
+              const col = GOLD.clone().multiplyScalar(alpha * 0.35 * intensity * flicker);
+              const li = lineIdx * 6;
+              linePositions[li] = pos[ix];
+              linePositions[li + 1] = pos[ix + 1];
+              linePositions[li + 2] = pos[ix + 2];
+              linePositions[li + 3] = pos[jx];
+              linePositions[li + 4] = pos[jx + 1];
+              linePositions[li + 5] = pos[jx + 2];
+
+              lineColors[li] = col.r; lineColors[li + 1] = col.g; lineColors[li + 2] = col.b;
+              lineColors[li + 3] = col.r; lineColors[li + 4] = col.g; lineColors[li + 5] = col.b;
+              lineIdx++;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  lineGeo.attributes.position.needsUpdate = true;
+  lineGeo.attributes.color.needsUpdate = true;
+  lineGeo.setDrawRange(0, lineIdx * 2);
+}
+
+// ============================================================
+// MAIN ANIMATION LOOP
+// ============================================================
+function animate() {
+  requestAnimationFrame(animate);
+
+  const delta = Math.min(clock.getDelta(), 0.05);
+  elapsed += delta;
+  phaseTime += delta;
+
+  particleMaterial.uniforms.uTime.value = elapsed;
+  glowMat.uniforms.uTime.value = elapsed;
+
+  const pos = geometry.attributes.position.array;
+  const col = geometry.attributes.color.array;
+  const sz = geometry.attributes.size.array;
+
+  // ---- Phase transitions ----
+  if (phase === PHASE.DRIFT && phaseTime > PHASE_DURATIONS[PHASE.DRIFT]) setPhase(PHASE.CONVERGE);
+  if (phase === PHASE.CONVERGE && phaseTime > PHASE_DURATIONS[PHASE.CONVERGE]) setPhase(PHASE.THRONE);
+  if (phase === PHASE.THRONE && phaseTime > PHASE_DURATIONS[PHASE.THRONE]) setPhase(PHASE.SCATTER);
+  if (phase === PHASE.SCATTER && phaseTime > PHASE_DURATIONS[PHASE.SCATTER]) setPhase(PHASE.DARKNESS);
+  if (phase === PHASE.DARKNESS && phaseTime > PHASE_DURATIONS[PHASE.DARKNESS]) setPhase(PHASE.RUSH_BACK);
+  if (phase === PHASE.RUSH_BACK && phaseTime > PHASE_DURATIONS[PHASE.RUSH_BACK]) setPhase(PHASE.SWORD_DROP);
+  if (phase === PHASE.SWORD_DROP && phaseTime > PHASE_DURATIONS[PHASE.SWORD_DROP]) setPhase(PHASE.TEXT_HOLD);
+  if (phase === PHASE.TEXT_HOLD && phaseTime > PHASE_DURATIONS[PHASE.TEXT_HOLD]) setPhase(PHASE.AMBIENT);
+
+  // ---- Update main particles ----
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    const px = pos[i3], py = pos[i3 + 1], pz = pos[i3 + 2];
+    const pOff = phaseOffsets[i];
+
+    if (phase === PHASE.DRIFT) {
+      pos[i3] += velocities[i3] + Math.sin(elapsed * 0.3 + pOff) * 0.0003;
+      pos[i3 + 1] += velocities[i3 + 1] + Math.cos(elapsed * 0.2 + pOff) * 0.0003;
+      pos[i3 + 2] += velocities[i3 + 2];
+
+      const fadeIn = Math.min(phaseTime / 2.0, 1.0);
+      const c = DIM_GOLD.clone().lerp(DARK, 0.5 - fadeIn * 0.3);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = (1.5 + Math.random() * 0.5) * fadeIn;
+
+      connectionDist = 0;
+      connectionIntensity = 0;
+    }
+
+    else if (phase === PHASE.CONVERGE) {
+      const t = Math.min(phaseTime / PHASE_DURATIONS[PHASE.CONVERGE], 1.0);
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const target = throneTargets[i];
+
+      pos[i3] += (target.x - px) * ease * 0.04;
+      pos[i3 + 1] += (target.y - py) * ease * 0.04;
+      pos[i3 + 2] += (target.z - pz) * ease * 0.04;
+
+      const bright = ease * 0.8;
+      const c = DIM_GOLD.clone().lerp(GOLD, bright);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 1.5 + bright * 2;
+
+      connectionDist = CONNECTION_DISTANCE * ease;
+      connectionIntensity = ease;
+    }
+
+    else if (phase === PHASE.THRONE) {
+      const target = throneTargets[i];
+      const breathe = Math.sin(elapsed * 1.5 + pOff) * 0.003;
+
+      pos[i3] += (target.x - px) * 0.08 + breathe;
+      pos[i3 + 1] += (target.y - py) * 0.08 + Math.cos(elapsed * 1.2 + pOff) * 0.002;
+      pos[i3 + 2] += (target.z - pz) * 0.08;
+
+      const pulse = 0.85 + Math.sin(elapsed * 2 + pOff) * 0.15;
+      const c = GOLD.clone().multiplyScalar(pulse);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 2.5 + Math.sin(elapsed * 1.8 + pOff) * 0.8;
+
+      connectionDist = CONNECTION_DISTANCE;
+      connectionIntensity = 1;
+      glowMat.uniforms.uIntensity.value = 1.0 + Math.sin(elapsed * 1.5) * 0.2;
+    }
+
+    else if (phase === PHASE.SCATTER) {
+      const t = Math.min(phaseTime / PHASE_DURATIONS[PHASE.SCATTER], 1.0);
+      // Explosive ease — fast start
+      const ease = 1 - Math.pow(1 - t, 4);
+      const target = scatterTargets[i];
+
+      pos[i3] += (target.x - px) * ease * 0.12;
+      pos[i3 + 1] += (target.y - py) * ease * 0.12;
+      pos[i3 + 2] += (target.z - pz) * ease * 0.12;
+
+      const fade = 1 - ease;
+      const c = GOLD.clone().lerp(DIM_GOLD, ease);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 2.5 * fade + 0.8;
+
+      connectionDist = CONNECTION_DISTANCE * fade * 0.5;
+      connectionIntensity = fade;
+      glowMat.uniforms.uIntensity.value = fade * 0.5;
+    }
+
+    else if (phase === PHASE.DARKNESS) {
+      // Brief darkness — particles continue drifting outward, fading
+      pos[i3] += (scatterTargets[i].x - px) * 0.02;
+      pos[i3 + 1] += (scatterTargets[i].y - py) * 0.02;
+      pos[i3 + 2] += (scatterTargets[i].z - pz) * 0.02;
+
+      const fade = 1 - Math.min(phaseTime / PHASE_DURATIONS[PHASE.DARKNESS], 1.0);
+      const c = DIM_GOLD.clone().multiplyScalar(fade * 0.3);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 0.8 * fade;
+
+      connectionDist = 0;
+      connectionIntensity = 0;
+      glowMat.uniforms.uIntensity.value = 0;
+    }
+
+    else if (phase === PHASE.RUSH_BACK) {
+      const t = Math.min(phaseTime / PHASE_DURATIONS[PHASE.RUSH_BACK], 1.0);
+      // Ease in then slam — accelerating
+      const ease = t * t * t;
+      const target = textTargets[i];
+
+      pos[i3] += (target.x - px) * ease * 0.08;
+      pos[i3 + 1] += (target.y - py) * ease * 0.08;
+      pos[i3 + 2] += (target.z - pz) * ease * 0.08;
+
+      // Brighten as they approach
+      const bright = ease * 0.9;
+      const c = DIM_GOLD.clone().lerp(GOLD, bright);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 1.0 + bright * 2.5;
+
+      connectionDist = CONNECTION_DISTANCE * ease * 0.6;
+      connectionIntensity = ease * 0.7;
+      glowMat.uniforms.uIntensity.value = ease * 0.6;
+    }
+
+    else if (phase === PHASE.SWORD_DROP) {
+      const target = textTargets[i];
+      // Snap to text positions firmly
+      pos[i3] += (target.x - px) * 0.12;
+      pos[i3 + 1] += (target.y - py) * 0.12;
+      pos[i3 + 2] += (target.z - pz) * 0.12;
+
+      // Shockwave displacement handled in shader
+      const pulse = 0.9 + Math.sin(elapsed * 3 + pOff) * 0.1;
+      const c = GOLD.clone().multiplyScalar(pulse);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 2.5 + Math.sin(elapsed * 2 + pOff) * 0.5;
+
+      connectionDist = CONNECTION_DISTANCE * 0.8;
+      connectionIntensity = 0.9;
+    }
+
+    else if (phase === PHASE.TEXT_HOLD || phase === PHASE.AMBIENT) {
+      const target = textTargets[i];
+
+      // Subtle drift but maintain shape — spring back to target
+      const drift = 0.0006;
+      const spring = 0.03;
+      pos[i3] += Math.sin(elapsed * 0.4 + pOff) * drift;
+      pos[i3 + 1] += Math.cos(elapsed * 0.35 + pOff * 1.3) * drift;
+      pos[i3 + 2] += Math.sin(elapsed * 0.25 + pOff * 0.7) * drift * 0.5;
+
+      // Spring back to target
+      pos[i3] += (target.x - pos[i3]) * spring;
+      pos[i3 + 1] += (target.y - pos[i3 + 1]) * spring;
+      pos[i3 + 2] += (target.z - pos[i3 + 2]) * spring;
+
+      // Mouse interaction — particles gently flee but spring back
+      if (mouseActive) {
+        const dx = pos[i3] - mouseWorld.x;
+        const dy = pos[i3 + 1] - mouseWorld.y;
+        const md = Math.sqrt(dx * dx + dy * dy);
+        if (md < 0.6 && md > 0.001) {
+          const force = (0.6 - md) * 0.008;
+          pos[i3] += (dx / md) * force;
+          pos[i3 + 1] += (dy / md) * force;
+        }
+      }
+
+      // Gentle breathing glow
+      const breathe = 0.8 + Math.sin(elapsed * 0.8 + pOff) * 0.2;
+      const c = GOLD.clone().multiplyScalar(breathe);
+      col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+      sz[i] = 2.0 + Math.sin(elapsed * 1.2 + pOff) * 0.6;
+
+      // Ambient connections — always present
+      connectionDist = CONNECTION_DISTANCE * 0.7;
+      connectionIntensity = 0.5 + Math.sin(elapsed * 0.5) * 0.15;
+      glowMat.uniforms.uIntensity.value = 0.4 + Math.sin(elapsed * 0.3) * 0.1;
+    }
+  }
+
+  // ---- Update sword particles ----
+  for (let i = PARTICLE_COUNT; i < PARTICLE_COUNT + SWORD_PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    const t = (i - PARTICLE_COUNT) / SWORD_PARTICLE_COUNT;
+    const pOff = phaseOffsets[i];
+
+    if (phase === PHASE.SWORD_DROP || phase === PHASE.TEXT_HOLD || phase === PHASE.AMBIENT) {
+      if (phase === PHASE.SWORD_DROP) {
+        const dropT = Math.min(phaseTime / (PHASE_DURATIONS[PHASE.SWORD_DROP] * 0.6), 1.0);
+        // Sword slams down with gravity-like acceleration
+        const dropEase = dropT * dropT; // Quadratic — accelerating
+
+        // Sword blade — vertical column of particles at the "I" position
+        const bladeHeight = 0.5; // Height of the blade
+        const targetY = swordTargetY - 0.15 + t * bladeHeight;
+        const currentStartY = swordStartY + t * 0.3;
+        const currentY = THREE.MathUtils.lerp(currentStartY, targetY, dropEase);
+
+        pos[i3] = swordTargetX + (Math.random() - 0.5) * 0.008;
+        pos[i3 + 1] = currentY;
+        pos[i3 + 2] = (Math.random() - 0.5) * 0.015;
+
+        // Trail effect — particles higher up are more faded
+        const trailAlpha = dropEase * (0.5 + t * 0.5);
+        // Bright white-gold for the sword
+        const c = WHITE.clone().lerp(BRIGHT_GOLD, 0.3 + t * 0.4);
+        c.multiplyScalar(trailAlpha);
+        col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+        sz[i] = (3.0 + (1 - t) * 2.0) * trailAlpha;
+
+        // Trigger shockwave at impact
+        if (dropT > 0.95 && !swordLanded) {
+          swordLanded = true;
+          shockwaveTime = elapsed;
+        }
+      } else {
+        // Sword resting — the "I" in INDUSTRIES
+        const bladeHeight = 0.5;
+        const targetY = swordTargetY - 0.15 + t * bladeHeight;
+
+        pos[i3] = swordTargetX + Math.sin(elapsed * 0.5 + pOff) * 0.002;
+        pos[i3 + 1] = targetY + Math.cos(elapsed * 0.4 + pOff) * 0.001;
+        pos[i3 + 2] = (Math.random() - 0.5) * 0.01;
+
+        // Glow — brighter at center of blade
+        const centerDist = Math.abs(t - 0.5) * 2;
+        const glow = 0.7 + Math.sin(elapsed * 1.5 + pOff) * 0.3;
+        const c = BRIGHT_GOLD.clone().lerp(WHITE, (1 - centerDist) * 0.3).multiplyScalar(glow);
+        col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+        sz[i] = 2.5 + (1 - centerDist) * 1.5 + Math.sin(elapsed * 2 + pOff) * 0.4;
+      }
+    } else {
+      // Hidden
+      sz[i] = 0;
+      col[i3] = 0; col[i3 + 1] = 0; col[i3 + 2] = 0;
+    }
+  }
+
+  // ---- Update background particles (always drifting) ----
+  const bgStart = PARTICLE_COUNT + SWORD_PARTICLE_COUNT;
+  for (let i = bgStart; i < TOTAL_PARTICLES; i++) {
+    const i3 = i * 3;
+    const pOff = phaseOffsets[i];
+
+    // Constant slow drift
+    pos[i3] += velocities[i3] + Math.sin(elapsed * 0.15 + pOff) * 0.0002;
+    pos[i3 + 1] += velocities[i3 + 1] + Math.cos(elapsed * 0.12 + pOff) * 0.0002;
+    pos[i3 + 2] += velocities[i3 + 2];
+
+    // Wrap around
+    if (pos[i3] > 4.5) pos[i3] = -4.5;
+    if (pos[i3] < -4.5) pos[i3] = 4.5;
+    if (pos[i3 + 1] > 3.5) pos[i3 + 1] = -3.5;
+    if (pos[i3 + 1] < -3.5) pos[i3 + 1] = 3.5;
+
+    // Mouse interaction for background particles too
+    if (mouseActive && (phase >= PHASE.TEXT_HOLD)) {
+      const dx = pos[i3] - mouseWorld.x;
+      const dy = pos[i3 + 1] - mouseWorld.y;
+      const md = Math.sqrt(dx * dx + dy * dy);
+      if (md < 1.5 && md > 0.001) {
+        // Attract slightly toward cursor — neural network effect
+        const force = (1.5 - md) * 0.001;
+        pos[i3] -= (dx / md) * force;
+        pos[i3 + 1] -= (dy / md) * force;
+      }
+    }
+
+    // Visibility based on phase
+    const bgAlpha = phase >= PHASE.RUSH_BACK
+      ? Math.min((phase === PHASE.RUSH_BACK ? phaseTime / PHASE_DURATIONS[PHASE.RUSH_BACK] : 1.0), 1.0)
+      : (phase <= PHASE.THRONE ? 0.3 : 0.1);
+
+    const twinkle = 0.3 + 0.3 * Math.sin(elapsed * 0.6 + pOff * 2);
+    const c = DIM_GOLD.clone().lerp(GOLD, twinkle * 0.2 * bgAlpha);
+    col[i3] = c.r; col[i3 + 1] = c.g; col[i3 + 2] = c.b;
+    sz[i] = (0.6 + twinkle * 0.5) * bgAlpha;
+  }
+
+  // ---- Shockwave ----
+  if (shockwaveTime > 0) {
+    const shockElapsed = elapsed - shockwaveTime;
+    const shockDuration = 1.2;
+    if (shockElapsed < shockDuration) {
+      const t = shockElapsed / shockDuration;
+      particleMaterial.uniforms.uShockwave.value = (1 - t) * (1 - t);
+      particleMaterial.uniforms.uShockCenter.value.set(swordTargetX, swordTargetY);
+      particleMaterial.uniforms.uShockRadius.value = t * 3.0;
+
+      // Flash on impact
+      if (shockElapsed < 0.3) {
+        glowMat.uniforms.uFlash.value = (1 - shockElapsed / 0.3) * 1.5;
+      } else {
+        glowMat.uniforms.uFlash.value *= 0.9;
+      }
+    } else {
+      particleMaterial.uniforms.uShockwave.value = 0;
+      glowMat.uniforms.uFlash.value *= 0.95;
+      if (glowMat.uniforms.uFlash.value < 0.001) glowMat.uniforms.uFlash.value = 0;
+    }
+  }
+
+  // ---- Bounds check for main particles ----
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    if (Math.abs(pos[i3]) > 5) pos[i3] *= 0.98;
+    if (Math.abs(pos[i3 + 1]) > 4) pos[i3 + 1] *= 0.98;
+  }
+
+  geometry.attributes.position.needsUpdate = true;
+  geometry.attributes.color.needsUpdate = true;
+  geometry.attributes.size.needsUpdate = true;
+
+  // ---- Connections ----
+  if (connectionDist > 0.01) {
+    updateConnections();
+  } else {
+    lineGeo.setDrawRange(0, 0);
+  }
+
+  // ---- Show overlay text ----
+  if ((phase === PHASE.TEXT_HOLD && phaseTime > 0.8) || phase === PHASE.AMBIENT) {
+    if (!textRevealed) {
+      textRevealed = true;
+      document.getElementById('tagline').classList.add('visible');
+      document.getElementById('contact').classList.add('visible');
+    }
+  }
+
+  // ---- Camera sway ----
+  const camTargetY = phase <= PHASE.THRONE ? 0.08 : 0.0;
+  camera.position.x = Math.sin(elapsed * 0.07) * 0.04;
+  camera.position.y += (camTargetY + Math.cos(elapsed * 0.05) * 0.025 - camera.position.y) * 0.02;
+  camera.lookAt(0, camTargetY * 0.5, 0);
+
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+// RESIZE
+// ============================================================
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  particleMaterial.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+});
+
+// ============================================================
+// START
+// ============================================================
+animate();
+</script>
+</body>
+</html>
